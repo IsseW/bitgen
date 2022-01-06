@@ -1,0 +1,2 @@
+[workspace]
+members = ["bitgen", "bitgen_derive", "bitgen_test"]
