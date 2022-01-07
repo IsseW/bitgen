@@ -108,8 +108,13 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
             let bits_to_represent = std::mem::size_of::<usize>() * 8 - num_variants.leading_zeros() as usize;
 
             let variant_fields: Vec<_> = data.variants.iter()
-                .filter(|variant| !matches!(variant.fields, syn::Fields::Unit))
-                .map(|variant| variant.fields.clone()).collect();
+                .filter_map(|variant| {
+                    match &variant.fields {
+                        syn::Fields::Named(fields) => Some(quote!{#fields}),
+                        syn::Fields::Unnamed(fields) => Some(quote!{#fields;}),
+                        syn::Fields::Unit => None,
+                    }
+                }).collect();
 
             let unit_idents: Vec<_> = data.variants.iter()
                 .filter(|variant| matches!(variant.fields, syn::Fields::Unit))
@@ -140,13 +145,6 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                         syn::Fields::Unit => None,
                     }).collect();
             
-            let captured_field_idents: Vec<Vec<_>> = data.variants.iter()
-                .filter_map(|variant| 
-                    match &variant.fields {
-                        syn::Fields::Named(fields) => Some(fields.named.iter().map(|field| format_ident!("t{}", syn::Member::Named(field.ident.clone().unwrap()))).collect()),
-                        syn::Fields::Unnamed(fields) => Some(fields.unnamed.iter().enumerate().map(|(i, _)| format_ident!("t{}", syn::Member::Unnamed(syn::Index::from(i)))).collect()),
-                        syn::Fields::Unit => None,
-                    }).collect();
             let field_types: Vec<Vec<_>> = data.variants.iter()
                 .filter_map(|variant| 
                     match &variant.fields {
@@ -158,6 +156,14 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
             let uuid = uuid::Uuid::new_v4();
             let unique_wrapper_ident = format_ident!("Wrap{}{}", ident, uuid.to_string().replace('-', ""));
             let unique_idents = idents.iter().map(|id| format_ident!("{}{}{}", ident, id, uuid.to_string().replace('-', "")));
+
+            let captured_field_idents: Vec<Vec<_>> = data.variants.iter()
+                .filter_map(|variant| 
+                    match &variant.fields {
+                        syn::Fields::Named(fields) => Some(fields.named.iter().map(|field| format_ident!("t_{}_{}", syn::Member::Named(field.ident.clone().unwrap()), uuid.to_string().replace('-', "_"))).collect()),
+                        syn::Fields::Unnamed(fields) => Some(fields.unnamed.iter().enumerate().map(|(i, _)| format_ident!("t_{}_{}", syn::Member::Unnamed(syn::Index::from(i)), uuid.to_string().replace('-', "_"))).collect()),
+                        syn::Fields::Unit => None,
+                    }).collect();
 
             let field_ident_id: Vec<Vec<_>> = field_idents.iter().map(|fields| fields.iter().map(|field| match field {
                 syn::Member::Named(ident) => fnv1a_hash_str_64(ident.to_string().as_str()) as usize,
@@ -176,11 +182,11 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                     }
                 )*
                 #(
-                    #vis struct #unique_idents #generics #variant_fields;
+                    #vis struct #unique_idents #generics #variant_fields
                     #(
                         impl #generics TupleAccess<#field_ident_id> for #unique_idents #generics {
                             type Element = #field_types;
-                            const BIT_OFFSET: usize = 0#(+<#field_type_offsets as BitType>::BITS)*;
+                            const BIT_OFFSET: usize = 0 #( + <#field_type_offsets as BitType>::BITS)*;
                         }
                     )*
                     impl #generics MaybeAccess<#ident_ids> for #ident #generics {
@@ -205,8 +211,8 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                                         let res = <#field_types as BitType>::to_aligned(&slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
                                         offset += <#field_types as BitType>::BITS;
                                         res
-                                    }
-                                ),*
+                                    },
+                                )*
                             }
                         }
                     }
@@ -229,19 +235,19 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                             #(
                                 Self::#unit_idents => {
                                     U::<#bits_to_represent>::from_aligned(&U(#unit_idents_index), &mut slice[internal::get_byte_range(offset, #bits_to_represent)], offset);
-                                }
-                            ), *
+                                },
+                            )*
                             #(
-                                Self::#idents { #(#field_idents: #captured_field_idents @ _), * } => {
+                                Self::#idents { #(#field_idents: #captured_field_idents @ _,)* } => {
                                     let range = internal::get_byte_range(offset, #bits_to_represent);
                                     U::<#bits_to_represent>::from_aligned(&U(#idents_index), &mut slice[range], offset);
                                     offset += #bits_to_represent;
                                     #(
                                         <#field_types as BitType>::from_aligned(#captured_field_idents, &mut slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
                                         offset += <#field_types as BitType>::BITS;
-                                    ) *
-                                }
-                            ), *
+                                    )*
+                                },
+                            )*
                         }
                     }
                     
