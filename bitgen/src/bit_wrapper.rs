@@ -173,3 +173,49 @@ where
         }
     }
 }
+
+impl<T: BitType> Bit<T>
+where
+    [u8; bits_to_bytes(T::BITS)]: Sized,
+    CTuple<{ T::BITS }, 8>: InferEq,
+{
+    pub fn as_u8(&self) -> u8 {
+        self.mem[0]
+    }
+}
+impl<T: BitType> Bit<T>
+where
+    [u8; bits_to_bytes(T::BITS)]: Sized,
+    CTuple<{ T::BITS }, 16>: InferEq,
+{
+    pub fn as_u16(&self) -> u16 {
+        unsafe { mem::transmute_copy(&self.mem) }
+    }
+}
+impl<T: BitType> Bit<T>
+where
+    [u8; bits_to_bytes(T::BITS)]: Sized,
+    CTuple<{ T::BITS }, 32>: InferEq,
+{
+    pub fn as_u32(&self) -> u32 {
+        unsafe { mem::transmute_copy(&self.mem) }
+    }
+}
+impl<T: BitType> Bit<T>
+where
+    [u8; bits_to_bytes(T::BITS)]: Sized,
+    CTuple<{ T::BITS }, 64>: InferEq,
+{
+    pub fn as_u64(&self) -> u64 {
+        unsafe { mem::transmute_copy(&self.mem) }
+    }
+}
+impl<T: BitType> Bit<T>
+where
+    [u8; bits_to_bytes(T::BITS)]: Sized,
+    CTuple<{ T::BITS }, 128>: InferEq,
+{
+    pub fn as_u128(&self) -> u128 {
+        unsafe { mem::transmute_copy(&self.mem) }
+    }
+}
