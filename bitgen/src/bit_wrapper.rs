@@ -1,31 +1,29 @@
-mod tuple_access;
+pub mod accessors;
+use accessors::TupleAccess;
+use num_traits::AsPrimitive;
 use std::{fmt, marker::PhantomData, mem, ops::RangeInclusive};
-use tuple_access::TupleAccess;
 use wyz::{Address, Const, Mut, Mutability};
 
 use crate::{
+    bit_num::{bts::Bytes, closest_pow_2, Type, Underlying},
     bit_type::BitType,
-    magic::{bits_to_bytes, InferEq},
+    magic::{bits_to_bytes, CTuple, InferEq},
+    prelude::U,
 };
 
-#[derive(Clone)]
-pub struct Access<'a, M: Mutability, O: BitType, T: BitType, const OFFSET: usize>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    bits: Address<M, Bit<O>>,
-    _marker: PhantomData<&'a T>,
-}
+use self::accessors::{DynAccess, MaybeAccess};
 
-#[derive(Clone)]
-pub struct AccessDyn<'a, M: Mutability, O: BitType, T: BitType>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    bits: Address<M, Bit<O>>,
-    offset: usize,
-    _marker: PhantomData<&'a T>,
-}
+mod access;
+mod access_dyn;
+mod maybe;
+mod maybe_dyn;
+mod predicate;
+
+use access::Access;
+use access_dyn::AccessDyn;
+use maybe::AccessMaybe;
+use maybe_dyn::AccessMaybeDyn;
+use predicate::*;
 
 pub trait ChildAccess<const I: usize> {
     type Child;
@@ -38,103 +36,36 @@ pub trait ChildAccessDyn {
     fn get_len(&self) -> usize;
 }
 
-impl<'a, M: Mutability, O: 'a + BitType, T: BitType, const N: usize, const OFFSET: usize>
-    ChildAccessDyn for Access<'a, M, O, [T; N], OFFSET>
-where
-    [T; N]: BitType,
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    type Child = AccessDyn<'a, M, O, T>;
-    fn get_child_dyn(self, index: usize) -> Self::Child {
-        if index >= N {
-            panic!("index out of bounds");
-        }
-        Self::Child {
-            bits: self.bits,
-            offset: OFFSET + index * T::BITS,
-            _marker: PhantomData,
-        }
-    }
-    fn get_len(&self) -> usize {
-        N
-    }
+pub trait ChildAccessMaybe<const I: usize> {
+    type Child;
+    fn get_child_maybe(self) -> Self::Child;
 }
 
-impl<'a, M: Mutability, O: 'a + BitType, T: BitType, const N: usize> ChildAccessDyn
-    for AccessDyn<'a, M, O, [T; N]>
-where
-    [T; N]: BitType,
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    type Child = AccessDyn<'a, M, O, T>;
-    fn get_child_dyn(self, index: usize) -> Self::Child {
-        if index >= N {
-            panic!("index out of bounds");
-        }
-        Self::Child {
-            bits: self.bits,
-            offset: self.offset + index * T::BITS,
-            _marker: PhantomData,
-        }
-    }
-    fn get_len(&self) -> usize {
-        N
-    }
+pub trait ChildAccessDynMaybe {
+    type Child;
+    fn get_child_dyn(self, index: usize) -> Self::Child;
+    fn get_len(&self) -> usize;
 }
 
-impl<'a, M: Mutability, O: 'a + BitType, T: TupleAccess<I> + BitType, const I: usize> ChildAccess<I>
-    for AccessDyn<'a, M, O, T>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-    <T as TupleAccess<I>>::Element: BitType,
-{
-    type Child = AccessDyn<'a, M, O, <T as TupleAccess<I>>::Element>;
-
-    fn get_child(self) -> Self::Child {
-        let offset = self.offset + <T as TupleAccess<I>>::BIT_OFFSET;
-        AccessDyn {
-            bits: self.bits,
-            offset,
-            _marker: PhantomData,
-        }
-    }
+pub const fn get_byte_range(offset: usize, size: usize) -> RangeInclusive<usize> {
+    (offset / 8)..=(offset + size - 1) / 8
 }
-
-impl<
-        'a,
-        M: Mutability,
-        O: 'a + BitType,
-        T: TupleAccess<I> + BitType,
-        const OFFSET: usize,
-        const I: usize,
-    > ChildAccess<I> for Access<'a, M, O, T, OFFSET>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-    <T as TupleAccess<I>>::Element: BitType,
-    [u8; OFFSET + <T as TupleAccess<I>>::BIT_OFFSET]: Sized,
-{
-    type Child = Access<
-        'a,
-        M,
-        O,
-        <T as TupleAccess<I>>::Element,
-        { OFFSET + <T as TupleAccess<I>>::BIT_OFFSET },
-    >;
-
-    fn get_child(self) -> Self::Child {
-        Self::Child {
-            bits: self.bits,
-            _marker: PhantomData,
-        }
-    }
-}
-
 pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
+    type Extracted;
+    type InsertResult;
+
     fn get<const I: usize>(self) -> <Self as ChildAccess<I>>::Child
     where
         Self: ChildAccess<I>,
     {
         self.get_child()
+    }
+
+    fn get_maybe<const I: usize>(self) -> <Self as ChildAccessMaybe<I>>::Child
+    where
+        Self: ChildAccessMaybe<I>,
+    {
+        self.get_child_maybe()
     }
 
     fn get_dyn(self, index: usize) -> <Self as ChildAccessDyn>::Child
@@ -151,77 +82,15 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_len()
     }
 
-    fn get_bits(&self) -> Address<M, Bit<O>>
+    fn extract(&self) -> Self::Extracted;
+
+    fn insert(&self, aligned: T) -> Self::InsertResult
     where
-        [u8; bits_to_bytes(O::BITS)]: Sized;
+        (M, Mut): InferEq;
 
-    fn get_offset(&self) -> usize;
-
-    fn get_byte_range(&self) -> RangeInclusive<usize> {
-        (self.get_offset() / 8)..=(self.get_offset() + T::BITS - 1) / 8
-    }
-
-    fn extract(&self) -> T
+    fn map(&self, f: impl FnMut(T) -> T) -> Self::InsertResult
     where
-        [u8; mem::size_of::<T>()]: Sized,
-        [u8; bits_to_bytes(O::BITS)]: Sized,
-    {
-        T::to_aligned(
-            &unsafe { &*self.get_bits().to_const() }.mem[self.get_byte_range()],
-            self.get_offset() % 8,
-        )
-    }
-
-    fn insert(&self, aligned: T)
-    where
-        (M, Mut): InferEq,
-        [u8; mem::size_of::<T>()]: Sized,
-        [u8; bits_to_bytes(O::BITS)]: Sized,
-    {
-        T::from_aligned(
-            &aligned,
-            &mut unsafe { &mut *self.get_bits().assert_mut().to_mut() }.mem[self.get_byte_range()],
-            self.get_offset() % 8,
-        )
-    }
-
-    fn map(&self, mut f: impl FnMut(T) -> T)
-    where
-        (M, Mut): InferEq,
-        [u8; mem::size_of::<T>()]: Sized,
-        [u8; bits_to_bytes(O::BITS)]: Sized,
-    {
-        self.insert(f(self.extract()));
-    }
-}
-
-impl<'a, M: Mutability, T: BitType, O: BitType, const OFFSET: usize> Accessor<O, T, M>
-    for Access<'a, M, O, T, OFFSET>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-{
-    fn get_bits(&self) -> Address<M, Bit<O>> {
-        self.bits
-    }
-
-    fn get_offset(&self) -> usize {
-        OFFSET
-    }
-}
-
-impl<'a, M: Mutability, T: BitType, O: BitType> Accessor<O, T, M> for AccessDyn<'a, M, O, T>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-{
-    fn get_bits(&self) -> Address<M, Bit<O>> {
-        self.bits
-    }
-
-    fn get_offset(&self) -> usize {
-        self.offset
-    }
+        (M, Mut): InferEq;
 }
 
 pub struct Bit<T: BitType>
@@ -236,18 +105,27 @@ impl<T: BitType> Bit<T>
 where
     [u8; bits_to_bytes(T::BITS)]: Sized,
 {
+    // Try only having one access function
     pub fn access(&self) -> Access<'_, Const, T, T, 0> {
-        Access {
-            bits: Address::from(self),
-            _marker: PhantomData,
-        }
+        Access::new(Address::from(self))
     }
 
     pub fn access_mut(&mut self) -> Access<'_, Mut, T, T, 0> {
-        Access {
-            bits: Address::from(self),
-            _marker: PhantomData,
-        }
+        Access::new(Address::from(self))
+    }
+
+    pub fn access_as<U: BitType>(&self) -> Access<'_, Const, T, U, 0>
+    where
+        CTuple<{ T::BITS }, { U::BITS }>: InferEq,
+    {
+        Access::new(Address::from(self))
+    }
+
+    pub fn access_as_mut<U: BitType>(&mut self) -> Access<'_, Mut, T, U, 0>
+    where
+        CTuple<{ T::BITS }, { U::BITS }>: InferEq,
+    {
+        Access::new(Address::from(self))
     }
 }
 

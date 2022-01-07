@@ -8,6 +8,40 @@ pub trait TupleAccess<const I: usize> {
     const BIT_OFFSET: usize;
 }
 
+pub trait DynAccess {
+    const MAX: usize;
+    type Element;
+    fn offset(i: usize) -> usize;
+}
+
+pub trait MaybeAccess<const I: usize> {
+    type Element;
+    const BIT_OFFSET: usize;
+    const EXPECTED: u32;
+}
+
+// fnv1a_hash_str_64("None") -> 7393530455478880603
+impl<T: BitType> MaybeAccess<7393530455478880603> for Option<T> {
+    type Element = ();
+    const BIT_OFFSET: usize = 1;
+    const EXPECTED: u32 = 0;
+}
+
+// fnv1a_hash_str_64("Some") -> 9998797273467360689
+impl<T: BitType> MaybeAccess<9998797273467360689> for Option<T> {
+    type Element = T;
+    const BIT_OFFSET: usize = 1;
+    const EXPECTED: u32 = 1;
+}
+
+impl<T: BitType, const N: usize> DynAccess for [T; N] {
+    const MAX: usize = N;
+    type Element = T;
+    fn offset(i: usize) -> usize {
+        i * T::BITS
+    }
+}
+
 impl<T: BitType, const I: usize, const N: usize> TupleAccess<I> for [T; N]
 where
     If<{ I < N }>: True,
@@ -281,6 +315,5 @@ impl<
     > TupleAccess<7> for (A, B, C, D, E, F, G, H)
 {
     type Element = G;
-    const BIT_OFFSET: usize =
-        A::BITS + B::BITS + C::BITS + D::BITS + E::BITS + F::BITS + G::BITS;
+    const BIT_OFFSET: usize = A::BITS + B::BITS + C::BITS + D::BITS + E::BITS + F::BITS + G::BITS;
 }

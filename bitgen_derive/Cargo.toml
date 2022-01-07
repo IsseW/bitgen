@@ -12,3 +12,4 @@ proc-macro = true
 syn = "1.0"
 quote = "1.0"
 uuid = {version = "0.8.2", features = ["v4"]}
+const-fnv1a-hash = "1.0.1"

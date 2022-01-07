@@ -2,7 +2,16 @@
 #![feature(generic_const_exprs)]
 #![feature(test)]
 use bitgen::prelude::*;
-use bitgen_derive::BitType;
+
+#[derive(BitType, Debug, PartialEq, Clone)]
+enum Haha {
+    Hi,
+    Ha,
+    Ho,
+    He,
+    Hu,
+    Hy,
+}
 
 #[derive(BitType, Debug, PartialEq, Clone)]
 enum Test {
@@ -10,30 +19,30 @@ enum Test {
     B,
     C(bool, bool),
     D,
-    E(bool, bool),
-    E0 {},
-    E1(),
+    E0(bool, Haha, Option<[u8; 4]>),
+    E1,
 }
 
 #[derive(BitType, Debug, PartialEq, Clone)]
-struct Haha {
-    a: bool,
-    b: Test,
-    c: bool,
-}
+struct T2 {}
 
 fn main() {
-    let unbit = Haha {
-        a: true,
-        b: Test::C(true, false),
-        c: false,
-    };
-    dbg!(std::mem::size_of_val(&unbit)); // = 5
-    let bit = Bit::from(unbit.clone());
-    dbg!(std::mem::size_of_val(&bit)); // = 1
-    assert_eq!(bit!(bit).extract(), unbit); // ok
+    let test = (
+        true,
+        [
+            Test::A,
+            Test::C(true, true),
+            Test::E0(false, Haha::Hi, Some(0xCAE15694u32.to_le_bytes())),
+        ],
+        false,
+        true,
+        false,
+    );
+    let bits = Bit::from(test);
+    for i in 0..4 {
+        dbg!(bit!(bits.1[2]?E0.2?Some[i]).extract());
+    }
 }
-
 extern crate test;
 #[cfg(test)]
 mod tests {
@@ -82,11 +91,11 @@ mod tests {
         let tuple = (false, true, false, true);
         let bit_tuple = Bit::from(tuple);
 
-        assert_eq!(bit!(bit_tuple(1)).extract(), true);
+        assert_eq!(bit!(bit_tuple.1).extract(), true);
 
         let tuple = (false, true, false, [true, true, true, false, true, true]);
         let bit_tuple = Bit::from(tuple);
-        assert_eq!(bit!(bit_tuple(3)[3]).extract(), false);
+        assert_eq!(bit!(bit_tuple.3[3]).extract(), false);
     }
 
     #[test]
@@ -94,15 +103,15 @@ mod tests {
         let tuple = (false, true, false, true);
         let mut bit_tuple = Bit::from(tuple);
 
-        bit!(mut bit_tuple(0)).insert(true);
-        bit!(mut bit_tuple(2)).insert(true);
+        bit!(mut bit_tuple.0).insert(true);
+        bit!(mut bit_tuple.2).insert(true);
 
         assert_eq!(bit!(bit_tuple).extract(), (true, true, true, true));
 
         let tuple = (false, true, false, [false; 61]);
         let mut bit_tuple = Bit::from(tuple);
-        bit!(mut bit_tuple(3)[32]).insert(true);
-        assert_eq!(bit!(bit_tuple(3)[32]).extract(), true);
+        bit!(mut bit_tuple.3[32]).insert(true);
+        assert_eq!(bit!(bit_tuple.3[32]).extract(), true);
     }
 
     #[test]
