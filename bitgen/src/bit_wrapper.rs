@@ -47,6 +47,33 @@ pub trait ChildAccessDynMaybe {
     fn get_len(&self) -> usize;
 }
 
+pub struct BitIter<
+    M: Mutability,
+    O: BitType,
+    T: BitType,
+    A: Accessor<O, T, M> + ChildAccessDyn + Clone,
+> {
+    accessor: A,
+    elem: usize,
+    _marker: PhantomData<(M, O, T)>,
+}
+
+impl<M: Mutability, O: BitType, T: BitType, A: Accessor<O, T, M> + ChildAccessDyn + Clone> Iterator
+    for BitIter<M, O, T, A>
+{
+    type Item = A::Child;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.elem < self.accessor.len() {
+            let res = Some(self.accessor.clone().get_dyn(self.elem));
+            self.elem += 1;
+            res
+        } else {
+            None
+        }
+    }
+}
+
 pub const fn get_byte_range(offset: usize, size: usize) -> RangeInclusive<usize> {
     (offset / 8)..=(offset + size - 1) / 8
 }
@@ -82,6 +109,36 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_len()
     }
 
+    fn iter(&self) -> BitIter<M, O, T, Self>
+    where
+        Self: ChildAccessDyn + Clone,
+    {
+        BitIter {
+            accessor: self.clone(),
+            elem: 0,
+            _marker: PhantomData,
+        }
+    }
+
+    type CastAccess<U: BitType, C: Mutability>;
+
+    fn access(self) -> Self::CastAccess<T, Const>;
+
+    fn access_mut(self) -> Self
+    where
+        (M, Mut): InferEq,
+    {
+        self
+    }
+
+    unsafe fn access_as<U: BitType>(self) -> Self::CastAccess<U, Const>
+    where
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq;
+    unsafe fn access_as_mut<U: BitType>(self) -> Self::CastAccess<U, Mut>
+    where
+        (M, Mut): InferEq,
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq;
+
     fn extract(&self) -> Self::Extracted;
 
     fn insert(&self, aligned: T) -> Self::InsertResult
@@ -114,14 +171,14 @@ where
         Access::new(Address::from(self))
     }
 
-    pub fn access_as<U: BitType>(&self) -> Access<'_, Const, T, U, 0>
+    pub unsafe fn access_as<U: BitType>(&self) -> Access<'_, Const, T, U, 0>
     where
         CTuple<{ T::BITS }, { U::BITS }>: InferEq,
     {
         Access::new(Address::from(self))
     }
 
-    pub fn access_as_mut<U: BitType>(&mut self) -> Access<'_, Mut, T, U, 0>
+    pub unsafe fn access_as_mut<U: BitType>(&mut self) -> Access<'_, Mut, T, U, 0>
     where
         CTuple<{ T::BITS }, { U::BITS }>: InferEq,
     {

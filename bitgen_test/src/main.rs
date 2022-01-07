@@ -1,48 +1,7 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![feature(test)]
-use bitgen::prelude::*;
-
-#[derive(BitType, Debug, PartialEq, Clone)]
-enum Haha {
-    Hi,
-    Ha,
-    Ho,
-    He,
-    Hu,
-    Hy,
-}
-
-#[derive(BitType, Debug, PartialEq, Clone)]
-enum Test {
-    A,
-    B,
-    C(bool, bool),
-    D,
-    E0(bool, Haha, Option<[u8; 4]>),
-    E1,
-}
-
-#[derive(BitType, Debug, PartialEq, Clone)]
-struct T2 {}
-
-fn main() {
-    let test = (
-        true,
-        [
-            Test::A,
-            Test::C(true, true),
-            Test::E0(false, Haha::Hi, Some(0xCAE15694u32.to_le_bytes())),
-        ],
-        false,
-        true,
-        false,
-    );
-    let bits = Bit::from(test);
-    for i in 0..4 {
-        dbg!(bit!(bits.1[2]?E0.2?Some[i]).extract());
-    }
-}
+fn main() {}
 extern crate test;
 #[cfg(test)]
 mod tests {

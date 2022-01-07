@@ -30,7 +30,7 @@ impl<
         'a,
         P: BitPredicate + Default,
         M: Mutability,
-        O: 'a + BitType,
+        O: BitType,
         T: MaybeAccess<I> + BitType,
         const OFFSET: usize,
         const I: usize,
@@ -68,7 +68,7 @@ impl<
         'a,
         P: BitPredicate + Default,
         M: Mutability,
-        O: 'a + BitType,
+        O: BitType,
         T: BitType + DynAccess,
         const OFFSET: usize,
     > ChildAccessDyn for AccessMaybe<'a, P, M, O, T, OFFSET>
@@ -92,7 +92,7 @@ impl<
         'a,
         P: BitPredicate + Default,
         M: Mutability,
-        O: 'a + BitType,
+        O: BitType,
         T: TupleAccess<I> + BitType,
         const OFFSET: usize,
         const I: usize,
@@ -175,5 +175,26 @@ where
         } else {
             Err(())
         }
+    }
+
+    type CastAccess<U: BitType, C: Mutability> = AccessMaybe<'a, P, C, O, U, OFFSET>;
+
+    fn access(self) -> Self::CastAccess<T, Const> {
+        Self::CastAccess::<T, Const>::new(self.bits.immut())
+    }
+
+    unsafe fn access_as<U: BitType>(self) -> Self::CastAccess<U, Const>
+    where
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
+    {
+        Self::CastAccess::<U, Const>::new(self.bits.immut())
+    }
+
+    unsafe fn access_as_mut<U: BitType>(self) -> Self::CastAccess<U, Mut>
+    where
+        (M, Mut): InferEq,
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
+    {
+        Self::CastAccess::<U, Mut>::new(self.bits.assert_mut())
     }
 }

@@ -28,7 +28,7 @@ impl<
         'a,
         P: BitPredicate,
         M: Mutability,
-        O: 'a + BitType,
+        O: BitType,
         T: MaybeAccess<I> + BitType,
         const I: usize,
     > ChildAccessMaybe<I> for AccessMaybeDyn<'a, P, M, O, T>
@@ -59,7 +59,7 @@ where
     }
 }
 
-impl<'a, P: BitPredicate, M: Mutability, O: 'a + BitType, T: BitType + DynAccess> ChildAccessDyn
+impl<'a, P: BitPredicate, M: Mutability, O: BitType, T: BitType + DynAccess> ChildAccessDyn
     for AccessMaybeDyn<'a, P, M, O, T>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
@@ -77,7 +77,29 @@ where
     }
 }
 
-impl<'a, P: BitPredicate + Default, M: Mutability, O: BitType, T: BitType> Accessor<O, T, M>
+impl<
+        'a,
+        P: BitPredicate,
+        M: Mutability,
+        O: BitType,
+        T: BitType + TupleAccess<I>,
+        const I: usize,
+    > ChildAccess<I> for AccessMaybeDyn<'a, P, M, O, T>
+where
+    [u8; bits_to_bytes(O::BITS)]: Sized,
+    T::Element: BitType,
+{
+    type Child = AccessMaybeDyn<'a, P, M, O, <T as TupleAccess<I>>::Element>;
+    fn get_child(self) -> Self::Child {
+        Self::Child::new(
+            self.bits,
+            self.offset + <T as TupleAccess<I>>::BIT_OFFSET,
+            self.predicate,
+        )
+    }
+}
+
+impl<'a, P: BitPredicate, M: Mutability, O: BitType, T: BitType> Accessor<O, T, M>
     for AccessMaybeDyn<'a, P, M, O, T>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
@@ -89,7 +111,10 @@ where
     type InsertResult = Result<(), ()>;
 
     fn extract(&self) -> Self::Extracted {
-        if P::default().is_true(&unsafe { &*self.bits.to_const() }.mem) {
+        if self
+            .predicate
+            .is_true(&unsafe { &*self.bits.to_const() }.mem)
+        {
             Some(T::to_aligned(
                 &unsafe { &*self.bits.to_const() }.mem[get_byte_range(self.offset, T::BITS)],
                 self.offset % 8,
@@ -103,7 +128,10 @@ where
     where
         (M, Mut): InferEq,
     {
-        if P::default().is_true(&unsafe { &*self.bits.to_const() }.mem) {
+        if self
+            .predicate
+            .is_true(&unsafe { &*self.bits.to_const() }.mem)
+        {
             T::from_aligned(
                 &aligned,
                 &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
@@ -120,6 +148,49 @@ where
     where
         (M, Mut): InferEq,
     {
-        self.insert(f(self.extract().ok_or(())?))
+        if self
+            .predicate
+            .is_true(&unsafe { &*self.bits.to_const() }.mem)
+        {
+            let extracted = T::to_aligned(
+                &unsafe { &*self.bits.to_const() }.mem[get_byte_range(self.offset, T::BITS)],
+                self.offset % 8,
+            );
+            let mapped = f(extracted);
+            T::from_aligned(
+                &mapped,
+                &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
+                    [get_byte_range(self.offset, T::BITS)],
+                self.offset % 8,
+            );
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    type CastAccess<U: BitType, C: Mutability> = AccessMaybeDyn<'a, P, C, O, U>;
+
+    fn access(self) -> Self::CastAccess<T, Const> {
+        Self::CastAccess::<T, Const>::new(self.bits.immut(), self.offset, self.predicate)
+    }
+
+    unsafe fn access_as<U: BitType>(self) -> Self::CastAccess<U, Const>
+    where
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
+    {
+        Self::CastAccess::<U, Const>::new(self.bits.immut(), self.offset, self.predicate)
+    }
+
+    unsafe fn access_as_mut<U: BitType>(self) -> Self::CastAccess<U, Mut>
+    where
+        (M, Mut): InferEq,
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
+    {
+        Self::CastAccess::<U, Mut>::new(
+            self.bits.assert_mut(),
+            self.offset,
+            self.predicate,
+        )
     }
 }

@@ -1,8 +1,6 @@
 use std::mem;
 
-use crate::magic::InferEq;
-
-pub trait BitType: Sized {
+pub trait BitType: Sized + 'static {
     const BITS: usize;
 
     // Offset should be in the range 0..8
@@ -232,28 +230,5 @@ impl<T: BitType> BitType for Option<T> {
         } else {
             Some(T::to_aligned(&slice[(offset + 1) / 8..], (offset + 1) % 8))
         }
-    }
-}
-
-pub trait BitStruct {
-    type Underlying: BitType;
-}
-
-impl<T: BitStruct> BitType for T
-where
-    (
-        [u8; mem::size_of::<T>()],
-        [u8; mem::size_of::<T::Underlying>()],
-    ): InferEq,
-{
-    const BITS: usize = T::Underlying::BITS;
-
-    fn from_aligned(aligned: &Self, slice: &mut [u8], offset: usize) {
-        T::Underlying::from_aligned(unsafe { mem::transmute(aligned) }, slice, offset);
-    }
-
-    fn to_aligned(slice: &[u8], offset: usize) -> Self {
-        let res = T::Underlying::to_aligned(slice, offset);
-        unsafe { mem::transmute_copy(&res) }
     }
 }

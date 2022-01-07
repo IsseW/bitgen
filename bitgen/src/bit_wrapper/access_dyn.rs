@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<'a, M: Mutability, O: 'a + BitType, T: BitType + DynAccess> ChildAccessDyn
+impl<'a, M: Mutability, O: BitType, T: BitType + DynAccess> ChildAccessDyn
     for AccessDyn<'a, M, O, T>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
@@ -40,7 +40,29 @@ where
     }
 }
 
-impl<'a, M: Mutability, O: 'a + BitType, T: TupleAccess<I> + BitType, const I: usize> ChildAccess<I>
+impl<'a, M: Mutability, O: BitType, T: BitType + MaybeAccess<I>, const I: usize> ChildAccessMaybe<I>
+    for AccessDyn<'a, M, O, T>
+where
+    [u8; bits_to_bytes(O::BITS)]: Sized,
+    [u8; <T as MaybeAccess<I>>::BIT_OFFSET]: Sized,
+    [u8; <T as MaybeAccess<I>>::EXPECTED as usize]: Sized,
+    <T as MaybeAccess<I>>::Element: BitType,
+    U<{ <T as MaybeAccess<I>>::BIT_OFFSET }>: BitType,
+    Bytes<{ closest_pow_2(bits_to_bytes(<T as MaybeAccess<I>>::BIT_OFFSET)) }>: Type,
+{
+    type Child = AccessMaybeDyn<
+        'a,
+        BitCheckDyn<{ <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>,
+        M,
+        O,
+        <T as MaybeAccess<I>>::Element,
+    >;
+    fn get_child_maybe(self) -> Self::Child {
+        Self::Child::new(self.bits, self.offset, BitCheckDyn(self.offset))
+    }
+}
+
+impl<'a, M: Mutability, O: BitType, T: TupleAccess<I> + BitType, const I: usize> ChildAccess<I>
     for AccessDyn<'a, M, O, T>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
@@ -87,5 +109,26 @@ where
         (M, Mut): InferEq,
     {
         self.insert(f(self.extract()))
+    }
+
+    type CastAccess<U: BitType, C: Mutability> = AccessDyn<'a, C, O, U>;
+
+    fn access(self) -> Self::CastAccess<T, Const> {
+        Self::CastAccess::<T, Const>::new(self.bits.immut(), self.offset)
+    }
+
+    unsafe fn access_as<U: BitType>(self) -> Self::CastAccess<U, Const>
+    where
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
+    {
+        Self::CastAccess::<U, Const>::new(self.bits.immut(), self.offset)
+    }
+
+    unsafe fn access_as_mut<U: BitType>(self) -> Self::CastAccess<U, Mut>
+    where
+        (M, Mut): InferEq,
+        CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
+    {
+        Self::CastAccess::<U, Mut>::new(self.bits.assert_mut(), self.offset)
     }
 }

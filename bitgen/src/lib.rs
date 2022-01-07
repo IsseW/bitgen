@@ -23,9 +23,11 @@ pub mod prelude {
     pub use crate::bit_wrapper::{
         accessors::DynAccess, accessors::MaybeAccess, accessors::TupleAccess, Accessor, Bit,
     };
+    pub const fn hash_ident(ident: &str) -> usize {
+        const_fnv1a_hash::fnv1a_hash_str_64(ident) as usize
+    }
     pub mod internal {
         pub use crate::bit_wrapper::get_byte_range;
-        pub use const_fnv1a_hash::fnv1a_hash_str_64;
     }
 }
 
@@ -40,7 +42,7 @@ macro_rules! bit_tail {
     };
 
     ($expr:expr; .$elem:ident $($tail:tt)*) => {
-        bit_tail!(Accessor::get::<{internal::fnv1a_hash_str_64(stringify!($elem)) as usize}>($expr); $($tail)*)
+        bit_tail!(Accessor::get::<{hash_ident(stringify!($elem))}>($expr); $($tail)*)
     };
     ($expr:expr; .$elem:literal $($tail:tt)*) => {
         bit_tail!(Accessor::get::<$elem>($expr); $($tail)*)
@@ -50,10 +52,10 @@ macro_rules! bit_tail {
     };
 
     ($expr:expr; ?$elem:ident $($tail:tt)*) => {
-        bit_tail!(Accessor::get_maybe::<{internal::fnv1a_hash_str_64(stringify!($elem)) as usize}>($expr); $($tail)*)
+        bit_tail!(Accessor::get_maybe::<{hash_ident(stringify!($elem))}>($expr); $($tail)*)
     };
     ($expr:expr; ? $($tail:tt)*) => {
-        bit_tail!(Accessor::get_maybe::<{internal::fnv1a_hash_str_64("Some") as usize}>($expr); $($tail)*)
+        bit_tail!(Accessor::get_maybe::<{hash_ident("Some")}>($expr); $($tail)*)
     };
 
     ($expr:expr;) => { $expr }
