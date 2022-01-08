@@ -3,12 +3,6 @@
 #![feature(generic_const_exprs)]
 #![feature(test)]
 
-use bitgen::prelude::*;
-
-#[derive(BitType)]
-enum Test4 {
-    A(u8),
-}
 extern crate test;
 #[cfg(test)]
 mod tests {
@@ -242,6 +236,27 @@ mod tests {
         let bit_test = Bit::from(test.clone());
         assert_eq!(test, bit!(bit_test).extract());
         assert_eq!(Some(42), bit!(bit_test?A.0).extract());
+    }
+
+    #[test]
+    fn test_iterator() {
+        let mut arr = [false; 32];
+        for i in (0..32).step_by(3) {
+            arr[i] = true;
+        }
+
+        let mut bit_arr = Bit::from(arr);
+        assert_eq!(arr, bit!(bit_arr).extract());
+
+        for (i, bit) in bit!(bit_arr).iter().enumerate() {
+            assert_eq!(i % 3 == 0, bit.extract());
+        }
+        assert_eq!(arr, bit!(bit_arr).extract());
+
+        for bit in bit!(mut bit_arr).iter() {
+            bit.insert(true);
+        }
+        assert_eq!([true; 32], bit!(bit_arr).extract());
     }
 
     #[bench]
