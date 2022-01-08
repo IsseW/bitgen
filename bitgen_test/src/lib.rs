@@ -51,11 +51,19 @@ mod tests {
         let tuple = (false, true, false, true);
         let bit_tuple = Bit::from(tuple);
 
+        assert_eq!(bit!(bit_tuple.0).extract(), false);
         assert_eq!(bit!(bit_tuple.1).extract(), true);
+        assert_eq!(bit!(bit_tuple.2).extract(), false);
+        assert_eq!(bit!(bit_tuple.3).extract(), true);
 
         let tuple = (false, true, false, [true, true, true, false, true, true]);
         let bit_tuple = Bit::from(tuple);
-        assert_eq!(bit!(bit_tuple.3[3]).extract(), false);
+        assert_eq!(bit!(bit_tuple.0).extract(), false);
+        assert_eq!(bit!(bit_tuple.1).extract(), true);
+        assert_eq!(bit!(bit_tuple.2).extract(), false);
+        for i in 0..6 {
+            assert_eq!(bit!(bit_tuple.3[i]).extract(), i != 3);
+        }
     }
 
     #[test]
@@ -63,15 +71,22 @@ mod tests {
         let tuple = (false, true, false, true);
         let mut bit_tuple = Bit::from(tuple);
 
+        assert_eq!(bit!(bit_tuple).extract(), tuple);
+
         bit!(mut bit_tuple.0).insert(true);
         bit!(mut bit_tuple.2).insert(true);
 
         assert_eq!(bit!(bit_tuple).extract(), (true, true, true, true));
 
-        let tuple = (false, true, false, [false; 61]);
+        let mut tuple = (false, true, false, [false; 61]);
         let mut bit_tuple = Bit::from(tuple);
+
+        tuple.3[32] = true;
         bit!(mut bit_tuple.3[32]).insert(true);
+
         assert_eq!(bit!(bit_tuple.3[32]).extract(), true);
+
+        assert_eq!(bit!(bit_tuple).extract(), tuple);
     }
 
     #[test]
