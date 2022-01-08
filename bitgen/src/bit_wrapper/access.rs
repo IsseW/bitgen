@@ -30,11 +30,10 @@ impl<
     > ChildAccessMaybe<I> for Access<'a, M, O, T, OFFSET>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
-    [u8; <T as MaybeAccess<I>>::EXPECTED as usize]: Sized,
     [u8; OFFSET + <T as MaybeAccess<I>>::BIT_OFFSET]: Sized,
     <T as MaybeAccess<I>>::Element: BitType,
-    U<{ <T as MaybeAccess<I>>::BIT_OFFSET }>: BitType,
-    Bytes<{ closest_pow_2(bits_to_bytes(<T as MaybeAccess<I>>::BIT_OFFSET)) }>: Type,
+    BitCheck<OFFSET, { <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>:
+        BitPredicate,
 {
     type Child = AccessMaybe<
         'a,

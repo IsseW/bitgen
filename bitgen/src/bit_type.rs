@@ -1,5 +1,7 @@
 use std::mem;
 
+use crate::prelude::internal::get_byte_range;
+
 pub trait BitType: Sized + 'static {
     const BITS: usize;
 
@@ -21,7 +23,7 @@ macro_rules! impl_bit_tuple {
                 #[allow(unused_assignments)]
                 fn from_aligned(aligned: &Self, slice: &mut [u8], mut offset: usize) {
                     $(
-                        [<T $ty>]::from_aligned(&aligned.$ty, &mut slice[offset / 8..=(offset + [<T $ty>]::BITS - 1) / 8], offset % 8);
+                        [<T $ty>]::from_aligned(&aligned.$ty, &mut slice[get_byte_range(offset, [<T $ty>]::BITS)], offset % 8);
                         offset += [<T $ty>]::BITS;
                     )*
                 }
@@ -31,7 +33,7 @@ macro_rules! impl_bit_tuple {
                     (
                         $(
                             {
-                                let res = [<T $ty>]::to_aligned(&slice[offset / 8..=(offset + [<T $ty>]::BITS - 1) / 8], offset % 8);
+                                let res = [<T $ty>]::to_aligned(&slice[get_byte_range(offset, [<T $ty>]::BITS)], offset % 8);
                                 offset += [<T $ty>]::BITS;
                                 res
                             },
@@ -63,7 +65,7 @@ where
         for i in 0..N {
             T::from_aligned(
                 &aligned[i],
-                &mut slice[(offset + i * T::BITS) / 8..=(offset + i * T::BITS + T::BITS - 1) / 8],
+                &mut slice[get_byte_range(offset + i * T::BITS, T::BITS)],
                 (offset + i * T::BITS) % 8,
             )
         }
@@ -73,7 +75,7 @@ where
         let mut result: Self = unsafe { mem::zeroed() };
         for i in 0..N {
             result[i] = T::to_aligned(
-                &slice[(offset + i * T::BITS) / 8..=(offset + i * T::BITS + T::BITS - 1) / 8],
+                &slice[get_byte_range(offset + i * T::BITS, T::BITS)],
                 (offset + i * T::BITS) % 8,
             );
         }

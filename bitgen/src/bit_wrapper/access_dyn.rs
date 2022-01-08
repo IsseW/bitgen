@@ -44,11 +44,9 @@ impl<'a, M: Mutability, O: BitType, T: BitType + MaybeAccess<I>, const I: usize>
     for AccessDyn<'a, M, O, T>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
-    [u8; <T as MaybeAccess<I>>::BIT_OFFSET]: Sized,
-    [u8; <T as MaybeAccess<I>>::EXPECTED as usize]: Sized,
     <T as MaybeAccess<I>>::Element: BitType,
-    U<{ <T as MaybeAccess<I>>::BIT_OFFSET }>: BitType,
-    Bytes<{ closest_pow_2(bits_to_bytes(<T as MaybeAccess<I>>::BIT_OFFSET)) }>: Type,
+    BitCheckDyn<{ <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>:
+        BitPredicate,
 {
     type Child = AccessMaybeDyn<
         'a,

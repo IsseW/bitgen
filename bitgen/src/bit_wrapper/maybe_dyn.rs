@@ -34,10 +34,9 @@ impl<
     > ChildAccessMaybe<I> for AccessMaybeDyn<'a, P, M, O, T>
 where
     [u8; bits_to_bytes(O::BITS)]: Sized,
-    [u8; <T as MaybeAccess<I>>::EXPECTED as usize]: Sized,
     <T as MaybeAccess<I>>::Element: BitType,
-    U<{ <T as MaybeAccess<I>>::BIT_OFFSET }>: BitType,
-    Bytes<{ closest_pow_2(bits_to_bytes(<T as MaybeAccess<I>>::BIT_OFFSET)) }>: Type,
+    BitCheckDyn<{ <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>:
+        BitPredicate,
 {
     type Child = AccessMaybeDyn<
         'a,
@@ -187,10 +186,6 @@ where
         (M, Mut): InferEq,
         CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq,
     {
-        Self::CastAccess::<U, Mut>::new(
-            self.bits.assert_mut(),
-            self.offset,
-            self.predicate,
-        )
+        Self::CastAccess::<U, Mut>::new(self.bits.assert_mut(), self.offset, self.predicate)
     }
 }

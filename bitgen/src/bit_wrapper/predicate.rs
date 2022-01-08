@@ -30,6 +30,17 @@ where
     }
 }
 
+impl<const N: usize> BitPredicate for BitCheck<N, 0, 0> {
+    fn is_true(&self, _: &[u8]) -> bool {
+        true
+    }
+}
+impl BitPredicate for BitCheckDyn<0, 0> {
+    fn is_true(&self, _: &[u8]) -> bool {
+        true
+    }
+}
+
 impl<const NUM_BITS: usize, const BITS: u32> BitPredicate for BitCheckDyn<NUM_BITS, BITS>
 where
     Underlying<NUM_BITS>: Type,

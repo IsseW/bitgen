@@ -1,11 +1,11 @@
 pub mod accessors;
 use accessors::TupleAccess;
 use num_traits::AsPrimitive;
-use std::{fmt, marker::PhantomData, mem, ops::RangeInclusive};
+use std::{fmt, marker::PhantomData, mem, ops::Range};
 use wyz::{Address, Const, Mut, Mutability};
 
 use crate::{
-    bit_num::{bts::Bytes, closest_pow_2, Type, Underlying},
+    bit_num::{Type, Underlying},
     bit_type::BitType,
     magic::{bits_to_bytes, CTuple, InferEq},
     prelude::U,
@@ -74,8 +74,12 @@ impl<M: Mutability, O: BitType, T: BitType, A: Accessor<O, T, M> + ChildAccessDy
     }
 }
 
-pub const fn get_byte_range(offset: usize, size: usize) -> RangeInclusive<usize> {
-    (offset / 8)..=(offset + size - 1) / 8
+pub const fn get_byte_range(offset: usize, size: usize) -> Range<usize> {
+    if size == 0 {
+        0..0
+    } else {
+        (offset / 8)..(offset + size - 1) / 8 + 1
+    }
 }
 pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
     type Extracted;
