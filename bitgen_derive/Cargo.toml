@@ -2,6 +2,11 @@
 name = "bitgen_derive"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.59"
+authors = ["Isse <isidornie@gmail.com>"]
+description = "Derive package for bitgen"
+repository = "https://github.com/IsseW/bitgen.git"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]

@@ -1,12 +1,12 @@
 #![allow(incomplete_features)]
-// Needed to use macros
+// Required to use this crate
 #![feature(generic_const_exprs)]
 #![feature(test)]
 
 extern crate test;
 #[cfg(test)]
 mod tests {
-    use bitgen::prelude::*;
+    use bitgen::*;
     use test::Bencher;
     #[test]
     fn test_size() {

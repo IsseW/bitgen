@@ -8,7 +8,7 @@ use crate::{
     bit_num::{Type, Underlying},
     bit_type::BitType,
     magic::{bits_to_bytes, CTuple, InferEq},
-    prelude::U,
+    U,
 };
 
 use self::accessors::{DynAccess, MaybeAccess};
@@ -85,6 +85,7 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
     type Extracted;
     type InsertResult;
 
+    /// Get a child accessor
     fn get<const I: usize>(self) -> <Self as ChildAccess<I>>::Child
     where
         Self: ChildAccess<I>,
@@ -92,6 +93,7 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_child()
     }
 
+    /// Get a maybe child accessor
     fn get_maybe<const I: usize>(self) -> <Self as ChildAccessMaybe<I>>::Child
     where
         Self: ChildAccessMaybe<I>,
@@ -99,6 +101,7 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_child_maybe()
     }
 
+    /// Get child accessor dynamically
     fn get_dyn(self, index: usize) -> <Self as ChildAccessDyn>::Child
     where
         Self: ChildAccessDyn,
@@ -106,6 +109,7 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_child_dyn(index)
     }
 
+    /// Length of a dynamic accessor
     fn len(&self) -> usize
     where
         Self: ChildAccessDyn,
@@ -113,6 +117,7 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_len()
     }
 
+    /// Get an iterator over sub accessors
     fn iter(&self) -> BitIter<M, O, T, Self>
     where
         Self: ChildAccessDyn + Clone,
@@ -126,8 +131,10 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
 
     type CastAccess<U: BitType, C: Mutability>;
 
+    /// Get an immutable accessor
     fn access(self) -> Self::CastAccess<T, Const>;
 
+    /// Get a mutable accessor
     fn access_mut(self) -> Self
     where
         (M, Mut): InferEq,
@@ -135,20 +142,26 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self
     }
 
+    /// Get an immutable accessor with a certain type
     unsafe fn access_as<U: BitType>(self) -> Self::CastAccess<U, Const>
     where
         CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq;
+
+    /// Get a mutable accessor with a certain type
     unsafe fn access_as_mut<U: BitType>(self) -> Self::CastAccess<U, Mut>
     where
         (M, Mut): InferEq,
         CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq;
 
+    /// Byte align the type and return it
     fn extract(&self) -> Self::Extracted;
 
+    /// Bit align the type and assign the bits.
     fn insert(&self, aligned: T) -> Self::InsertResult
     where
         (M, Mut): InferEq;
 
+    /// Byte align the type, map it with the function, then bit align the result and assign it.
     fn map(&self, f: impl FnMut(T) -> T) -> Self::InsertResult
     where
         (M, Mut): InferEq;
@@ -166,15 +179,17 @@ impl<T: BitType> Bit<T>
 where
     [u8; bits_to_bytes(T::BITS)]: Sized,
 {
-    // Try only having one access function
+    /// Get an immutable accessor
     pub fn access(&self) -> Access<'_, Const, T, T, 0> {
         Access::new(Address::from(self))
     }
 
+    /// Get a mutable accessor
     pub fn access_mut(&mut self) -> Access<'_, Mut, T, T, 0> {
         Access::new(Address::from(self))
     }
 
+    /// Get an immutable accessor with a certain type
     pub unsafe fn access_as<U: BitType>(&self) -> Access<'_, Const, T, U, 0>
     where
         CTuple<{ T::BITS }, { U::BITS }>: InferEq,
@@ -182,6 +197,7 @@ where
         Access::new(Address::from(self))
     }
 
+    /// Get a mutable accessor with a certain type
     pub unsafe fn access_as_mut<U: BitType>(&mut self) -> Access<'_, Mut, T, U, 0>
     where
         CTuple<{ T::BITS }, { U::BITS }>: InferEq,

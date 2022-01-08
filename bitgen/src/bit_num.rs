@@ -93,6 +93,7 @@ mod unsigned {
 
     use super::max_with_bits;
 
+    /// An unsigned integer with N bits.
     #[derive(Default, Clone, Copy, Debug)]
     pub struct U<const N: usize>(pub <Underlying<N> as Type>::U)
     where

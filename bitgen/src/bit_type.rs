@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::prelude::internal::get_byte_range;
+use crate::internal::get_byte_range;
 
 pub trait BitType: Sized + 'static {
     const BITS: usize;
@@ -82,6 +82,7 @@ where
         result
     }
 }
+
 
 impl BitType for () {
     const BITS: usize = 0;

@@ -26,19 +26,19 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
 
                 quote! {
                     #(
-                        impl #generics TupleAccess<#field_ident_id> for #ident #generics {
+                        impl #generics bitgen::TupleAccess<#field_ident_id> for #ident #generics {
                             type Element = #field_types;
-                            const BIT_OFFSET: usize = 0#(+<#field_type_offsets as BitType>::BITS)*;
+                            const BIT_OFFSET: usize = 0#(+<#field_type_offsets as bitgen::BitType>::BITS)*;
                         }
                     )*
 
-                    impl #generics BitType for #ident #generics {
-                        const BITS: usize = 0#(+<#field_types as BitType>::BITS)*;
+                    impl #generics bitgen::BitType for #ident #generics {
+                        const BITS: usize = 0#(+<#field_types as bitgen::BitType>::BITS)*;
 
                         fn from_aligned(aligned: &Self, slice: &mut [u8], mut offset: usize) {
                             #(
-                                <#field_types as BitType>::from_aligned(&aligned.#field_idents, &mut slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
-                                offset += <#field_types as BitType>::BITS;
+                                <#field_types as bitgen::BitType>::from_aligned(&aligned.#field_idents, &mut slice[internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                offset += <#field_types as bitgen::BitType>::BITS;
                             )*
                         }
 
@@ -46,8 +46,8 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                             Self {
                                 #(
                                     #field_idents: {
-                                        let res = <#field_types as BitType>::to_aligned(&slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
-                                        offset += <#field_types as BitType>::BITS;
+                                        let res = <#field_types as bitgen::BitType>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                        offset += <#field_types as bitgen::BitType>::BITS;
                                         res
                                     }
                                 ),*
@@ -70,27 +70,27 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                 
                 quote! {
                     #(
-                        impl #generics TupleAccess<#field_idents> for #ident #generics {
+                        impl #generics bitgen::TupleAccess<#field_idents> for #ident #generics {
                             type Element = #field_types;
-                            const BIT_OFFSET: usize = 0#(+<#field_type_offsets as BitType>::BITS)*;
+                            const BIT_OFFSET: usize = 0#(+<#field_type_offsets as bitgen::BitType>::BITS)*;
                         }
                     )*
-                    impl #generics BitType for #ident #generics {
-                        const BITS: usize = 0#(+<#field_types as BitType>::BITS)*;
+                    impl #generics bitgen::BitType for #ident #generics {
+                        const BITS: usize = 0#(+<#field_types as bitgen::BitType>::BITS)*;
 
                         fn from_aligned(aligned: &Self, slice: &mut [u8], mut offset: usize) {
                             #(
-                                <#field_types as BitType>::from_aligned(&aligned.#field_idents, &mut slice[offset / 8..=(offset + <#field_types as BitType>::BITS - 1) / 8], offset % 8);
-                                offset += <#field_types as BitType>::BITS;
+                                <#field_types as bitgen::BitType>::from_aligned(&aligned.#field_idents, &mut slice[bitgen::internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                offset += <#field_types as bitgen::BitType>::BITS;
                             )*
                         }
 
-                        fn to_aligned(slice: &[u8], mut offset: usize) -> Self { 
+                        fn to_aligned(slice: &[u8], mut offset: usize) -> Self {
                             Self(
                                 #(
                                     {
-                                        let res = <#field_types as BitType>::to_aligned(&slice[offset / 8..=(offset + <#field_types as BitType>::BITS - 1) / 8], offset % 8);
-                                        offset += <#field_types as BitType>::BITS;
+                                        let res = <#field_types as bitgen::BitType>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                        offset += <#field_types as bitgen::BitType>::BITS;
                                         res
                                     }
                                 ),*
@@ -101,7 +101,7 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
             },
             syn::Fields::Unit => {
                 quote! {
-                    impl #generics BitType for #ident #generics {
+                    impl #generics bitgen::BitType for #ident #generics {
                         const BITS: usize = 0;
 
                         fn from_aligned(aligned: &Self, slice: &mut [u8], mut offset: usize) {}
@@ -185,10 +185,10 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
 
             let implementation = if num_variants == 1 {
                 quote! {
-                    impl #generics BitType for #ident #generics {
+                    impl #generics bitgen::BitType for #ident #generics {
                         const BITS: usize = #unique_wrapper_ident(0)#(
                             .max(0#(
-                                + <#field_types as BitType>::BITS
+                                + <#field_types as bitgen::BitType>::BITS
                             )*)
                         )*.0;
 
@@ -196,7 +196,7 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                             #(
                                 if let Self::#idents { #(#field_idents: #captured_field_idents @ _,)* } = aligned {
                                     #(
-                                        <#field_types as BitType>::from_aligned(#captured_field_idents, &mut slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
+                                        <#field_types as bitgen::BitType>::from_aligned(#captured_field_idents, &mut slice[bitgen::internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
                                         offset += <#field_types as BitType>::BITS;
                                     )*
                                 }
@@ -211,8 +211,8 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                                 Self::#idents {
                                     #(
                                         #field_idents: {
-                                            let res = <#field_types as BitType>::to_aligned(&slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
-                                            offset += <#field_types as BitType>::BITS;
+                                            let res = <#field_types as bitgen::BitType>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                            offset += <#field_types as bitgen::BitType>::BITS;
                                             res
                                         },
                                     )*
@@ -224,10 +224,10 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
             } else {
                 quote! {
                     
-                    impl #generics BitType for #ident #generics {
+                    impl #generics bitgen::BitType for #ident #generics {
                         const BITS: usize = #bits_to_represent + #unique_wrapper_ident(0)#(
                             .max(0#(
-                                + <#field_types as BitType>::BITS
+                                + <#field_types as bitgen::BitType>::BITS
                             )*)
                         )*.0;
 
@@ -235,16 +235,16 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                             match &aligned {
                                 #(
                                     Self::#unit_idents => {
-                                        U::<#bits_to_represent>::from_aligned(&U(#unit_idents_index), &mut slice[internal::get_byte_range(offset, #bits_to_represent)], offset);
+                                        bitgen::U::<#bits_to_represent>::from_aligned(&bitgen::U(#unit_idents_index), &mut slice[bitgen::internal::get_byte_range(offset, #bits_to_represent)], offset);
                                     },
                                 )*
                                 #(
                                     Self::#idents { #(#field_idents: #captured_field_idents @ _,)* } => {
-                                        let range = internal::get_byte_range(offset, #bits_to_represent);
-                                        U::<#bits_to_represent>::from_aligned(&U(#idents_index), &mut slice[range], offset);
+                                        let range = bitgen::internal::get_byte_range(offset, #bits_to_represent);
+                                        bitgen::U::<#bits_to_represent>::from_aligned(&bitgen::U(#idents_index), &mut slice[range], offset);
                                         offset += #bits_to_represent;
                                         #(
-                                            <#field_types as BitType>::from_aligned(#captured_field_idents, &mut slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
+                                            <#field_types as bitgen::BitType>::from_aligned(#captured_field_idents, &mut slice[bitgen::internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
                                             offset += <#field_types as BitType>::BITS;
                                         )*
                                     },
@@ -253,14 +253,14 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                         }
                         
                         fn to_aligned(slice: &[u8], mut offset: usize) -> Self {
-                            let underlying = U::<#bits_to_represent>::to_aligned(&slice[internal::get_byte_range(offset, #bits_to_represent)], offset);
+                            let underlying = bitgen::U::<#bits_to_represent>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, #bits_to_represent)], offset);
                             offset += #bits_to_represent;
                             match underlying.0 {
                                 #(#unit_idents_index => Self::#unit_idents,)*
                                 #(#idents_index => Self::#idents {
                                     #(#field_idents: {
-                                        let res = <#field_types as BitType>::to_aligned(&slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
-                                        offset += <#field_types as BitType>::BITS;
+                                        let res = <#field_types as bitgen::BitType>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
+                                        offset += <#field_types as bitgen::BitType>::BITS;
                                         res
                                     }), *
                                 },)*
@@ -273,7 +273,7 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
 
             quote! {
                 #(
-                    impl #generics MaybeAccess<#unit_ident_ids> for #ident #generics {
+                    impl #generics bitgen::MaybeAccess<#unit_ident_ids> for #ident #generics {
                         type Element = ();
                         const BIT_OFFSET: usize = #bits_to_represent;
                         const EXPECTED: u32 = #unit_idents_index;
@@ -282,23 +282,23 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                 #(
                     #vis struct #unique_idents #generics #variant_fields
                     #(
-                        impl #generics TupleAccess<#field_ident_id> for #unique_idents #generics {
+                        impl #generics bitgen::TupleAccess<#field_ident_id> for #unique_idents #generics {
                             type Element = #field_types;
-                            const BIT_OFFSET: usize = 0 #( + <#field_type_offsets as BitType>::BITS)*;
+                            const BIT_OFFSET: usize = 0 #( + <#field_type_offsets as bitgen::BitType>::BITS)*;
                         }
                     )*
-                    impl #generics MaybeAccess<#ident_ids> for #ident #generics {
+                    impl #generics bitgen::MaybeAccess<#ident_ids> for #ident #generics {
                         type Element = #unique_idents #generics;
                         const BIT_OFFSET: usize = #bits_to_represent;
                         const EXPECTED: u32 = #idents_index;
                     }
-                    impl #generics BitType for #unique_idents #generics {
-                        const BITS: usize = 0#(+<#field_types as BitType>::BITS)*;
+                    impl #generics bitgen::BitType for #unique_idents #generics {
+                        const BITS: usize = 0#(+<#field_types as bitgen::BitType>::BITS)*;
 
                         fn from_aligned(aligned: &Self, slice: &mut [u8], mut offset: usize) {
                             #(
-                                <#field_types as BitType>::from_aligned(&aligned.#field_idents, &mut slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
-                                offset += <#field_types as BitType>::BITS;
+                                <#field_types as bitgen::BitType>::from_aligned(&aligned.#field_idents, &mut slice[bitgen::internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                offset += <#field_types as bitgen::BitType>::BITS;
                             )*
                         }
 
@@ -306,8 +306,8 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                             Self {
                                 #(
                                     #field_idents: {
-                                        let res = <#field_types as BitType>::to_aligned(&slice[internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
-                                        offset += <#field_types as BitType>::BITS;
+                                        let res = <#field_types as bitgen::BitType>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, <#field_types as bitgen::BitType>::BITS)], offset % 8);
+                                        offset += <#field_types as bitgen::BitType>::BITS;
                                         res
                                     },
                                 )*
