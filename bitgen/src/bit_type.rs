@@ -20,7 +20,7 @@ macro_rules! impl_bit_tuple {
                 $([u8; mem::size_of::<[< T $ty >]>()]: Sized), * {
                 const BITS: usize = 0 $(+ [< T $ty >]::BITS) *;
 
-                #[allow(unused_assignments)]
+                #[allow(unused_assignments, clippy::eval_order_dependence)]
                 fn from_aligned(aligned: &Self, slice: &mut [u8], mut offset: usize) {
                     $(
                         [<T $ty>]::from_aligned(&aligned.$ty, &mut slice[get_byte_range(offset, [<T $ty>]::BITS)], offset % 8);
@@ -28,7 +28,7 @@ macro_rules! impl_bit_tuple {
                     )*
                 }
 
-                #[allow(unused_assignments)]
+                #[allow(unused_assignments, clippy::eval_order_dependence)]
                 fn to_aligned(slice: &[u8], mut offset: usize) -> Self {
                     (
                         $(
@@ -83,7 +83,6 @@ where
     }
 }
 
-
 impl BitType for () {
     const BITS: usize = 0;
 
@@ -128,7 +127,7 @@ impl BitType for u8 {
             slice[0]
         } else {
             let slice_ref = unsafe { mem::transmute::<&[u8], (&u16, usize)>(slice).0 };
-            let num = slice_ref.clone();
+            let num = *slice_ref;
             ((num >> offset) & (u8::MAX as u16)) as u8
         }
     }
@@ -155,7 +154,7 @@ impl BitType for u16 {
             *slice_ref
         } else {
             let slice_ref = unsafe { mem::transmute::<&[u8], (&u32, usize)>(slice).0 };
-            let num = slice_ref.clone();
+            let num = *slice_ref;
             ((num >> offset) & (u16::MAX as u32)) as u16
         }
     }
@@ -182,7 +181,7 @@ impl BitType for u32 {
             *slice_ref
         } else {
             let slice_ref = unsafe { mem::transmute::<&[u8], (&u64, usize)>(slice).0 };
-            let num = slice_ref.clone();
+            let num = *slice_ref;
             ((num >> offset) & (u32::MAX as u64)) as u32
         }
     }
@@ -209,8 +208,115 @@ impl BitType for u64 {
             *slice_ref
         } else {
             let slice_ref = unsafe { mem::transmute::<&[u8], (&u128, usize)>(slice).0 };
-            let num = slice_ref.clone();
+            let num = *slice_ref;
             ((num >> offset) & (u64::MAX as u128)) as u64
+        }
+    }
+}
+
+impl BitType for i8 {
+    const BITS: usize = 8;
+
+    fn from_aligned(aligned: &Self, slice: &mut [u8], offset: usize) {
+        if slice.len() == 1 {
+            slice[0] = unsafe { mem::transmute(*aligned) };
+        } else {
+            let byte = u16::MAX & (*aligned as u16) << offset;
+            let bits = !(u16::MAX << offset);
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut u16, usize)>(slice).0 };
+            *slice_ref &= bits;
+            *slice_ref |= byte;
+        }
+    }
+
+    fn to_aligned(slice: &[u8], offset: usize) -> Self {
+        if slice.len() == 1 {
+            unsafe { mem::transmute(slice[0]) }
+        } else {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&u16, usize)>(slice).0 };
+            let num = *slice_ref;
+            ((num >> offset) & (u8::MAX as u16)) as i8
+        }
+    }
+}
+impl BitType for i16 {
+    const BITS: usize = 16;
+
+    fn from_aligned(aligned: &Self, slice: &mut [u8], offset: usize) {
+        if slice.len() == 1 {
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut i16, usize)>(slice).0 };
+            *slice_ref = *aligned;
+        } else {
+            let byte = u32::MAX & (*aligned as u32) << offset;
+            let bits = !(u32::MAX << offset);
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut u32, usize)>(slice).0 };
+            *slice_ref &= bits;
+            *slice_ref |= byte;
+        }
+    }
+
+    fn to_aligned(slice: &[u8], offset: usize) -> Self {
+        if slice.len() == 1 {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&i16, usize)>(slice).0 };
+            *slice_ref
+        } else {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&u32, usize)>(slice).0 };
+            let num = *slice_ref;
+            ((num >> offset) & (u16::MAX as u32)) as i16
+        }
+    }
+}
+impl BitType for i32 {
+    const BITS: usize = 32;
+
+    fn from_aligned(aligned: &Self, slice: &mut [u8], offset: usize) {
+        if slice.len() == 1 {
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut i32, usize)>(slice).0 };
+            *slice_ref = *aligned;
+        } else {
+            let byte = u64::MAX & unsafe { mem::transmute::<i32, u32>(*aligned) as u64 } << offset;
+            let bits = !(u64::MAX << offset);
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut u64, usize)>(slice).0 };
+            *slice_ref &= bits;
+            *slice_ref |= byte;
+        }
+    }
+
+    fn to_aligned(slice: &[u8], offset: usize) -> Self {
+        if slice.len() == 1 {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&i32, usize)>(slice).0 };
+            *slice_ref
+        } else {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&u64, usize)>(slice).0 };
+            let num = *slice_ref;
+            ((num >> offset) & (u32::MAX as u64)) as i32
+        }
+    }
+}
+impl BitType for i64 {
+    const BITS: usize = 64;
+
+    fn from_aligned(aligned: &Self, slice: &mut [u8], offset: usize) {
+        if slice.len() == 1 {
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut i64, usize)>(slice).0 };
+            *slice_ref = *aligned;
+        } else {
+            let byte = u128::MAX & (*aligned as u128) << offset;
+            let bits = !(u128::MAX << offset);
+            let slice_ref = unsafe { mem::transmute::<&mut [u8], (&mut u128, usize)>(slice).0 };
+            *slice_ref &= bits;
+            *slice_ref |= byte;
+        }
+    }
+
+    fn to_aligned(slice: &[u8], offset: usize) -> Self {
+        if slice.len() == 1 {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&i64, usize)>(slice).0 };
+            *slice_ref
+        } else {
+            let slice_ref = unsafe { mem::transmute::<&[u8], (&u128, usize)>(slice).0 };
+            let num = *slice_ref;
+            ((num >> offset) & (u64::MAX as u128)) as i64
         }
     }
 }

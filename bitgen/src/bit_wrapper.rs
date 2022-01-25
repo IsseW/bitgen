@@ -117,6 +117,14 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
         self.get_len()
     }
 
+    /// Length of a dynamic accessor
+    fn is_empty(&self) -> bool
+    where
+        Self: ChildAccessDyn,
+    {
+        self.get_len() == 0
+    }
+
     /// Get an iterator over sub accessors
     fn iter(&self) -> BitIter<M, O, T, Self>
     where
@@ -143,11 +151,15 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
     }
 
     /// Get an immutable accessor with a certain type
+    /// # Safety
+    /// This is basically a `mem::transmute`, therefore it's very unsafe.
     unsafe fn access_as<U: BitType>(self) -> Self::CastAccess<U, Const>
     where
         CTuple<{ <U as BitType>::BITS }, { <T as BitType>::BITS }>: InferEq;
 
     /// Get a mutable accessor with a certain type
+    /// # Safety
+    /// This is basically a `mem::transmute`, therefore it's very unsafe.
     unsafe fn access_as_mut<U: BitType>(self) -> Self::CastAccess<U, Mut>
     where
         (M, Mut): InferEq,
@@ -190,6 +202,8 @@ where
     }
 
     /// Get an immutable accessor with a certain type
+    /// # Safety
+    /// This is basically a `mem::transmute`, therefore it's very unsafe.
     pub unsafe fn access_as<U: BitType>(&self) -> Access<'_, Const, T, U, 0>
     where
         CTuple<{ T::BITS }, { U::BITS }>: InferEq,
@@ -198,6 +212,8 @@ where
     }
 
     /// Get a mutable accessor with a certain type
+    /// # Safety
+    /// This is basically a `mem::transmute`, therefore it's very unsafe.
     pub unsafe fn access_as_mut<U: BitType>(&mut self) -> Access<'_, Mut, T, U, 0>
     where
         CTuple<{ T::BITS }, { U::BITS }>: InferEq,
@@ -212,13 +228,11 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Bit[")?;
-        let mut i = 0;
-        for byte in self.mem {
+        for (i, byte) in self.mem.iter().enumerate() {
             if i > 0 {
                 write!(f, "_")?;
             }
             write!(f, "{:08b}", byte)?;
-            i += 1;
         }
         write!(f, "]")
     }

@@ -12,3 +12,4 @@ license = "MIT"
 
 [dependencies]
 bitgen = { path = "../bitgen" }
+num-traits = "0.2.14"

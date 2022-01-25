@@ -9,7 +9,7 @@ use super::max_with_bits;
 
 /// An unsigned integer with N bits.
 #[derive(Default, Clone, Copy, Debug)]
-pub struct U<const N: usize>(pub <Underlying<N> as Type>::U)
+pub struct U<const N: usize>(<Underlying<N> as Type>::U)
 where
     Underlying<N>: Type;
 impl<const N: usize> U<N>
@@ -17,7 +17,21 @@ where
     Underlying<N>: Type,
 {
     pub fn new(value: <Underlying<N> as Type>::U) -> Self {
-        U(value)
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                value <= max_with_bits(N),
+                "Value too large for {} bits, {:?} < {:?}",
+                N,
+                value,
+                <Underlying<N> as Type>::U::one() << N,
+            );
+        }
+        U(value & max_with_bits(N))
+    }
+
+    pub fn extract_underlying(self) -> <Underlying<N> as Type>::U {
+        self.0
     }
 }
 
@@ -28,7 +42,14 @@ where
     type Output = Self;
 
     fn add(self, rhs: U<N>) -> Self::Output {
-        U(self.0 + rhs.0)
+        let value = self.0 + rhs.0;
+        #[cfg(debug_assertions)]
+        {
+            if value > max_with_bits(N) {
+                panic!("Attempted to add with overflow");
+            }
+        }
+        U(value & max_with_bits(N))
     }
 }
 impl<const N: usize> ops::Sub<U<N>> for U<N>
@@ -38,7 +59,8 @@ where
     type Output = Self;
 
     fn sub(self, rhs: U<N>) -> Self::Output {
-        U(self.0 - rhs.0)
+        let value = self.0 - rhs.0;
+        U(value & max_with_bits(N))
     }
 }
 impl<const N: usize> ops::Mul<U<N>> for U<N>
@@ -48,7 +70,14 @@ where
     type Output = Self;
 
     fn mul(self, rhs: U<N>) -> Self::Output {
-        U(self.0 * rhs.0)
+        let value = self.0 * rhs.0;
+        #[cfg(debug_assertions)]
+        {
+            if value > max_with_bits(N) {
+                panic!("Attempted to multiply with overflow");
+            }
+        }
+        U(value & max_with_bits(N))
     }
 }
 impl<const N: usize> ops::Div<U<N>> for U<N>
@@ -58,6 +87,7 @@ where
     type Output = Self;
 
     fn div(self, rhs: U<N>) -> Self::Output {
+        // can never overflow
         U(self.0 / rhs.0)
     }
 }
@@ -68,6 +98,7 @@ where
     type Output = Self;
 
     fn rem(self, rhs: U<N>) -> Self::Output {
+        // Can never overflow
         U(self.0 % rhs.0)
     }
 }
@@ -78,6 +109,7 @@ where
     type Output = Self;
 
     fn bitand(self, rhs: U<N>) -> Self::Output {
+        // Can never overflow
         U(self.0 & rhs.0)
     }
 }
@@ -88,6 +120,7 @@ where
     type Output = Self;
 
     fn bitor(self, rhs: U<N>) -> Self::Output {
+        // Can never overflow
         U(self.0 | rhs.0)
     }
 }
@@ -98,6 +131,7 @@ where
     type Output = Self;
 
     fn bitxor(self, rhs: U<N>) -> Self::Output {
+        // Can never overflow
         U(self.0 ^ rhs.0)
     }
 }
@@ -108,7 +142,13 @@ where
     type Output = Self;
 
     fn shl(self, rhs: usize) -> Self::Output {
-        U(self.0 << rhs)
+        #[cfg(debug_assertions)]
+        {
+            if rhs >= N {
+                panic!("Attempted to shift left with overflow");
+            }
+        }
+        U((self.0 << rhs) & max_with_bits(N))
     }
 }
 impl<const N: usize> ops::Shr<usize> for U<N>
@@ -118,7 +158,13 @@ where
     type Output = Self;
 
     fn shr(self, rhs: usize) -> Self::Output {
-        U(self.0 >> rhs)
+        #[cfg(debug_assertions)]
+        {
+            if rhs >= N {
+                panic!("Attempted to shift right with overflow");
+            }
+        }
+        U((self.0 & max_with_bits(N)) >> rhs)
     }
 }
 
@@ -128,7 +174,14 @@ where
     <Underlying<N> as Type>::U: ops::AddAssign<<Underlying<N> as Type>::U>,
 {
     fn add_assign(&mut self, rhs: U<N>) {
-        self.0 += rhs.0;
+        let value = self.0 + rhs.0;
+        #[cfg(debug_assertions)]
+        {
+            if value > max_with_bits(N) {
+                panic!("Attempted to add with overflow");
+            }
+        }
+        self.0 = value & max_with_bits(N);
     }
 }
 impl<const N: usize> ops::SubAssign<U<N>> for U<N>
@@ -137,7 +190,8 @@ where
     <Underlying<N> as Type>::U: ops::SubAssign<<Underlying<N> as Type>::U>,
 {
     fn sub_assign(&mut self, rhs: U<N>) {
-        self.0 -= rhs.0;
+        let value = self.0 - rhs.0;
+        self.0 = value & max_with_bits(N);
     }
 }
 impl<const N: usize> ops::MulAssign<U<N>> for U<N>
@@ -146,7 +200,14 @@ where
     <Underlying<N> as Type>::U: ops::MulAssign<<Underlying<N> as Type>::U>,
 {
     fn mul_assign(&mut self, rhs: U<N>) {
-        self.0 *= rhs.0;
+        let value = self.0 * rhs.0;
+        #[cfg(debug_assertions)]
+        {
+            if value > max_with_bits(N) {
+                panic!("Attempted to multiply with overflow");
+            }
+        }
+        self.0 = value & max_with_bits(N);
     }
 }
 impl<const N: usize> ops::DivAssign<U<N>> for U<N>
@@ -155,6 +216,7 @@ where
     <Underlying<N> as Type>::U: ops::DivAssign<<Underlying<N> as Type>::U>,
 {
     fn div_assign(&mut self, rhs: U<N>) {
+        // Can never overflow
         self.0 /= rhs.0;
     }
 }
@@ -164,6 +226,7 @@ where
     <Underlying<N> as Type>::U: ops::RemAssign<<Underlying<N> as Type>::U>,
 {
     fn rem_assign(&mut self, rhs: U<N>) {
+        // Can never overflow
         self.0 %= rhs.0;
     }
 }
@@ -173,6 +236,7 @@ where
     <Underlying<N> as Type>::U: ops::BitAndAssign<<Underlying<N> as Type>::U>,
 {
     fn bitand_assign(&mut self, rhs: U<N>) {
+        // Can never overflow
         self.0 &= rhs.0;
     }
 }
@@ -182,6 +246,7 @@ where
     <Underlying<N> as Type>::U: ops::BitOrAssign<<Underlying<N> as Type>::U>,
 {
     fn bitor_assign(&mut self, rhs: U<N>) {
+        // Can never overflow
         self.0 |= rhs.0;
     }
 }
@@ -191,6 +256,7 @@ where
     <Underlying<N> as Type>::U: ops::BitXorAssign<<Underlying<N> as Type>::U>,
 {
     fn bitxor_assign(&mut self, rhs: U<N>) {
+        // Can never overflow
         self.0 ^= rhs.0;
     }
 }
@@ -198,18 +264,32 @@ impl<const N: usize> ops::ShlAssign<usize> for U<N>
 where
     Underlying<N>: Type,
     <Underlying<N> as Type>::U: ops::ShlAssign<usize>,
+    <Underlying<N> as Type>::U: ops::BitAndAssign<<Underlying<N> as Type>::U>,
 {
     fn shl_assign(&mut self, rhs: usize) {
-        self.0 <<= rhs;
+        #[cfg(debug_assertions)]
+        {
+            if rhs >= N {
+                panic!("Attempted to shift left with overflow");
+            }
+        }
+        self.0 = (self.0 << rhs) & max_with_bits(N);
     }
 }
 impl<const N: usize> ops::ShrAssign<usize> for U<N>
 where
     Underlying<N>: Type,
     <Underlying<N> as Type>::U: ops::ShrAssign<usize>,
+    <Underlying<N> as Type>::U: ops::BitAndAssign<<Underlying<N> as Type>::U>,
 {
     fn shr_assign(&mut self, rhs: usize) {
-        self.0 >>= rhs;
+        #[cfg(debug_assertions)]
+        {
+            if rhs >= N {
+                panic!("Attempted to shift right with overflow");
+            }
+        }
+        self.0 = (self.0 << rhs) & max_with_bits(N);
     }
 }
 
@@ -220,7 +300,7 @@ where
     type Output = Self;
 
     fn not(self) -> Self::Output {
-        U(!self.0)
+        U(!self.0 & max_with_bits(N))
     }
 }
 
@@ -233,7 +313,7 @@ where
     }
 
     fn is_zero(&self) -> bool {
-        (self.0 & max_with_bits(N)).is_zero()
+        self.0.is_zero()
     }
 }
 impl<const N: usize> One for U<N>
@@ -250,11 +330,31 @@ where
     Underlying<N>: Type,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.0 & max_with_bits(N) == other.0 & max_with_bits(N)
+        self.0.eq(&other.0)
     }
 }
 
 impl<const N: usize> Eq for U<N> where Underlying<N>: Type {}
+
+impl<const N: usize> PartialOrd for U<N>
+where
+    Underlying<N>: Type,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Should never be overflowed
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<const N: usize> Ord for U<N>
+where
+    Underlying<N>: Type,
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Should never be overflowed
+        self.0.cmp(&other.0)
+    }
+}
 
 impl<const N: usize> Num for U<N>
 where
@@ -274,7 +374,7 @@ where
     <Underlying<N> as Type>::U: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0 & max_with_bits(N))
+        write!(f, "{}", self.0)
     }
 }
 
@@ -285,7 +385,7 @@ where
     <Underlying<B> as Type>::U: AsPrimitive<<Underlying<A> as Type>::U>,
 {
     fn as_(self) -> U<A> {
-        U::new((self.0 & max_with_bits(B)).as_())
+        U::new(self.0.as_())
     }
 }
 
@@ -295,7 +395,7 @@ where
     <Underlying<B> as Type>::U: AsPrimitive<T>,
 {
     fn as_(self) -> T {
-        (self.0 & max_with_bits(B)).as_()
+        self.0.as_()
     }
 }
 

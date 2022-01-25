@@ -23,9 +23,7 @@ where
     U<NUM_BITS>: BitType,
 {
     fn is_true(&self, slice: &[u8]) -> bool {
-        U::<NUM_BITS>::to_aligned(&slice[get_byte_range(OFFSET, NUM_BITS)], OFFSET % 8)
-            .0
-            .as_()
+        U::<NUM_BITS>::to_aligned(&slice[get_byte_range(OFFSET, NUM_BITS)], OFFSET % 8).as_()
             == BITS
     }
 }
@@ -47,9 +45,7 @@ where
     U<NUM_BITS>: BitType,
 {
     fn is_true(&self, slice: &[u8]) -> bool {
-        U::<NUM_BITS>::to_aligned(&slice[get_byte_range(self.0, NUM_BITS)], self.0 % 8)
-            .0
-            .as_()
+        U::<NUM_BITS>::to_aligned(&slice[get_byte_range(self.0, NUM_BITS)], self.0 % 8).as_()
             == BITS
     }
 }

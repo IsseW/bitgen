@@ -7,7 +7,46 @@ extern crate test;
 #[cfg(test)]
 mod tests {
     use bitgen::*;
+    use num_traits::{cast::AsPrimitive, Zero};
     use test::Bencher;
+
+    #[test]
+    fn test_bit_u() {
+        let mut b: U<4> = ubits(10);
+        b += ubits(2);
+        assert_eq!(b, ubits(12));
+        assert_eq!(<bitgen::U<4> as AsPrimitive<u8>>::as_(b), 12u8);
+        b /= ubits(4);
+        assert_eq!(b, ubits(3));
+
+        assert!(b < ubits(4));
+        assert!(b <= ubits(3));
+        assert!(b > ubits(2));
+        assert!(b >= ubits(3));
+        b -= ubits(3);
+        assert!(b.is_zero());
+    }
+
+    #[test]
+    fn test_bit_i() {
+        let mut b: I<4> = ibits(5);
+        b += ibits(2);
+        assert_eq!(b, ibits(7));
+        assert_eq!(<bitgen::I<4> as AsPrimitive<i8>>::as_(b), 7i8);
+        b /= ibits(4);
+        assert_eq!(b, ibits(1));
+
+        assert!(b < ibits(2));
+        assert!(b <= ibits(1));
+        assert!(b > ibits(0));
+        assert!(b >= ibits(1));
+        b -= ibits(1);
+        assert!(b.is_zero());
+
+        b -= ibits(1);
+        assert_eq!(b, ibits(-1));
+    }
+
     #[test]
     fn test_size() {
         // 4 bits so should use 1 byte

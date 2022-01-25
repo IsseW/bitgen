@@ -235,13 +235,13 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                             match &aligned {
                                 #(
                                     Self::#unit_idents => {
-                                        bitgen::U::<#bits_to_represent>::from_aligned(&bitgen::U(#unit_idents_index), &mut slice[bitgen::internal::get_byte_range(offset, #bits_to_represent)], offset);
+                                        bitgen::U::<#bits_to_represent>::from_aligned(&bitgen::U::new(#unit_idents_index), &mut slice[bitgen::internal::get_byte_range(offset, #bits_to_represent)], offset);
                                     },
                                 )*
                                 #(
                                     Self::#idents { #(#field_idents: #captured_field_idents @ _,)* } => {
                                         let range = bitgen::internal::get_byte_range(offset, #bits_to_represent);
-                                        bitgen::U::<#bits_to_represent>::from_aligned(&bitgen::U(#idents_index), &mut slice[range], offset);
+                                        bitgen::U::<#bits_to_represent>::from_aligned(&bitgen::U::new(#idents_index), &mut slice[range], offset);
                                         offset += #bits_to_represent;
                                         #(
                                             <#field_types as bitgen::BitType>::from_aligned(#captured_field_idents, &mut slice[bitgen::internal::get_byte_range(offset, <#field_types as BitType>::BITS)], offset % 8);
@@ -255,7 +255,7 @@ pub fn bit_type(input: TokenStream) -> TokenStream {
                         fn to_aligned(slice: &[u8], mut offset: usize) -> Self {
                             let underlying = bitgen::U::<#bits_to_represent>::to_aligned(&slice[bitgen::internal::get_byte_range(offset, #bits_to_represent)], offset);
                             offset += #bits_to_represent;
-                            match underlying.0 {
+                            match underlying.extract_underlying() {
                                 #(#unit_idents_index => Self::#unit_idents,)*
                                 #(#idents_index => Self::#idents {
                                     #(#field_idents: {

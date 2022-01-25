@@ -1,3 +1,4 @@
+mod signed;
 mod unsigned;
 
 use std::fmt;
@@ -6,10 +7,15 @@ use num_traits::AsPrimitive;
 
 use crate::magic::bits_to_bytes;
 
+pub use self::signed::I;
 pub use self::unsigned::U;
 
 fn max_with_bits<T: num_traits::PrimInt>(num_bits: usize) -> T {
-    !((!T::zero()) << num_bits)
+    if num_bits >= std::mem::size_of::<T>() * 8 {
+        T::max_value()
+    } else {
+        !((!T::zero()) << num_bits)
+    }
 }
 const fn log2(n: usize) -> usize {
     std::mem::size_of::<usize>() * 8 - n.leading_zeros() as usize
@@ -90,16 +96,13 @@ where
     Underlying<N>: Type,
     <Underlying<N> as Type>::U: std::fmt::Display,
 {
-    #[cfg(debug_assertions)]
-    {
-        use num_traits::One;
-        assert!(
-            value < <Underlying<N> as Type>::U::one() << N,
-            "Value too large for {} bits, {} < {}",
-            N,
-            value,
-            <Underlying<N> as Type>::U::one() << N,
-        );
-    }
     U::new(value)
+}
+
+pub fn ibits<const N: usize>(value: <Underlying<N> as Type>::I) -> I<N>
+where
+    Underlying<N>: Type,
+    <Underlying<N> as Type>::U: std::fmt::Display,
+{
+    I::new(value)
 }
