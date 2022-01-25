@@ -1,25 +1,24 @@
 pub mod accessors;
 use accessors::TupleAccess;
 use num_traits::AsPrimitive;
-use std::{fmt, marker::PhantomData, mem, ops::Range};
+use std::{marker::PhantomData, mem, ops::Range};
 use wyz::{Address, Const, Mut, Mutability};
 
 use crate::{
     bit_num::{Type, Underlying},
     bit_type::BitType,
     magic::{bits_to_bytes, CTuple, InferEq},
-    U,
+    BitContainer, U,
 };
 
 use self::accessors::{DynAccess, MaybeAccess};
 
-mod access;
-mod access_dyn;
+pub(crate) mod access;
+pub(crate) mod access_dyn;
 mod maybe;
 mod maybe_dyn;
 mod predicate;
 
-use access::Access;
 use access_dyn::AccessDyn;
 use maybe::AccessMaybe;
 use maybe_dyn::AccessMaybeDyn;
@@ -49,17 +48,21 @@ pub trait ChildAccessDynMaybe {
 
 pub struct BitIter<
     M: Mutability,
-    O: BitType,
+    BC: BitContainer,
     T: BitType,
-    A: Accessor<O, T, M> + ChildAccessDyn + Clone,
+    A: Accessor<BC, T, M> + ChildAccessDyn + Clone,
 > {
     accessor: A,
     elem: usize,
-    _marker: PhantomData<(M, O, T)>,
+    _marker: PhantomData<(M, BC, T)>,
 }
 
-impl<M: Mutability, O: BitType, T: BitType, A: Accessor<O, T, M> + ChildAccessDyn + Clone> Iterator
-    for BitIter<M, O, T, A>
+impl<
+        M: Mutability,
+        BC: BitContainer,
+        T: BitType,
+        A: Accessor<BC, T, M> + ChildAccessDyn + Clone,
+    > Iterator for BitIter<M, BC, T, A>
 {
     type Item = A::Child;
 
@@ -81,7 +84,7 @@ pub const fn get_byte_range(offset: usize, size: usize) -> Range<usize> {
         (offset / 8)..(offset + size - 1) / 8 + 1
     }
 }
-pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
+pub trait Accessor<BC: BitContainer, T: BitType, M: Mutability>: Sized {
     type Extracted;
     type InsertResult;
 
@@ -126,7 +129,7 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
     }
 
     /// Get an iterator over sub accessors
-    fn iter(&self) -> BitIter<M, O, T, Self>
+    fn iter(&self) -> BitIter<M, BC, T, Self>
     where
         Self: ChildAccessDyn + Clone,
     {
@@ -177,136 +180,4 @@ pub trait Accessor<O: BitType, T: BitType, M: Mutability>: Sized {
     fn map(&self, f: impl FnMut(T) -> T) -> Self::InsertResult
     where
         (M, Mut): InferEq;
-}
-
-pub struct Bit<T: BitType>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-{
-    mem: [u8; bits_to_bytes(T::BITS)],
-    _marker: PhantomData<T>,
-}
-
-impl<T: BitType> Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-{
-    /// Get an immutable accessor
-    pub fn access(&self) -> Access<'_, Const, T, T, 0> {
-        Access::new(Address::from(self))
-    }
-
-    /// Get a mutable accessor
-    pub fn access_mut(&mut self) -> Access<'_, Mut, T, T, 0> {
-        Access::new(Address::from(self))
-    }
-
-    /// Get an immutable accessor with a certain type
-    /// # Safety
-    /// This is basically a `mem::transmute`, therefore it's very unsafe.
-    pub unsafe fn access_as<U: BitType>(&self) -> Access<'_, Const, T, U, 0>
-    where
-        CTuple<{ T::BITS }, { U::BITS }>: InferEq,
-    {
-        Access::new(Address::from(self))
-    }
-
-    /// Get a mutable accessor with a certain type
-    /// # Safety
-    /// This is basically a `mem::transmute`, therefore it's very unsafe.
-    pub unsafe fn access_as_mut<U: BitType>(&mut self) -> Access<'_, Mut, T, U, 0>
-    where
-        CTuple<{ T::BITS }, { U::BITS }>: InferEq,
-    {
-        Access::new(Address::from(self))
-    }
-}
-
-impl<T: BitType> fmt::Debug for Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Bit[")?;
-        for (i, byte) in self.mem.iter().enumerate() {
-            if i > 0 {
-                write!(f, "_")?;
-            }
-            write!(f, "{:08b}", byte)?;
-        }
-        write!(f, "]")
-    }
-}
-
-impl<T: BitType> Default for Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-{
-    fn default() -> Self {
-        Self {
-            mem: [0; bits_to_bytes(T::BITS)],
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<T: BitType> From<T> for Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-    [u8; mem::size_of::<T>()]: Sized,
-{
-    fn from(value: T) -> Self {
-        let mut mem: [u8; bits_to_bytes(T::BITS)] = unsafe { mem::zeroed() };
-        T::from_aligned(&value, &mut mem, 0);
-        Self {
-            mem,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<T: BitType> Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-    CTuple<{ T::BITS }, 8>: InferEq,
-{
-    pub fn as_u8(&self) -> u8 {
-        self.mem[0]
-    }
-}
-impl<T: BitType> Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-    CTuple<{ T::BITS }, 16>: InferEq,
-{
-    pub fn as_u16(&self) -> u16 {
-        unsafe { mem::transmute_copy(&self.mem) }
-    }
-}
-impl<T: BitType> Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-    CTuple<{ T::BITS }, 32>: InferEq,
-{
-    pub fn as_u32(&self) -> u32 {
-        unsafe { mem::transmute_copy(&self.mem) }
-    }
-}
-impl<T: BitType> Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-    CTuple<{ T::BITS }, 64>: InferEq,
-{
-    pub fn as_u64(&self) -> u64 {
-        unsafe { mem::transmute_copy(&self.mem) }
-    }
-}
-impl<T: BitType> Bit<T>
-where
-    [u8; bits_to_bytes(T::BITS)]: Sized,
-    CTuple<{ T::BITS }, 128>: InferEq,
-{
-    pub fn as_u128(&self) -> u128 {
-        unsafe { mem::transmute_copy(&self.mem) }
-    }
 }

@@ -10,6 +10,7 @@ mod bit_num;
 
 mod bit_type;
 mod bit_wrapper;
+mod containers;
 mod magic;
 
 pub use crate::bit_num::{ibits, ubits, I, U};
@@ -19,8 +20,9 @@ pub use bitgen_derive::BitType;
 
 pub use crate::bit_type::BitType;
 pub use crate::bit_wrapper::{
-    accessors::DynAccess, accessors::MaybeAccess, accessors::TupleAccess, Accessor, Bit,
+    accessors::DynAccess, accessors::MaybeAccess, accessors::TupleAccess, Accessor,
 };
+pub use containers::*;
 
 /// Constant hash function for string
 pub const fn hash_ident(ident: &str) -> usize {
@@ -69,7 +71,7 @@ macro_rules! bit_tail {
 /// #![allow(incomplete_features)]
 //  // Required to use this crate
 /// #![feature(generic_const_exprs)]
-/// 
+///
 /// use bitgen::*;
 /// let tuple = (false, true, (false, true));
 /// let bit_tuple = Bit::from(tuple);

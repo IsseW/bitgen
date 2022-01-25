@@ -1,19 +1,25 @@
+use crate::BitContainer;
+
 use super::*;
-#[derive(Clone)]
-pub struct AccessDyn<'a, M: Mutability, O: BitType, T: BitType>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    bits: Address<M, Bit<O>>,
+
+pub struct AccessDyn<'a, M: Mutability, BC: BitContainer, T: BitType> {
+    bits: Address<M, BC>,
     offset: usize,
     _marker: PhantomData<&'a T>,
 }
 
-impl<'a, M: Mutability, O: BitType, T: BitType> AccessDyn<'a, M, O, T>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    pub(crate) fn new(bits: Address<M, Bit<O>>, offset: usize) -> Self {
+impl<'a, M: Mutability, BC: BitContainer, T: BitType> Clone for AccessDyn<'a, M, BC, T> {
+    fn clone(&self) -> Self {
+        Self {
+            bits: self.bits.clone(),
+            offset: self.offset,
+            _marker: self._marker.clone(),
+        }
+    }
+}
+
+impl<'a, M: Mutability, BC: BitContainer, T: BitType> AccessDyn<'a, M, BC, T> {
+    pub(crate) fn new(bits: Address<M, BC>, offset: usize) -> Self {
         Self {
             bits,
             offset,
@@ -22,13 +28,12 @@ where
     }
 }
 
-impl<'a, M: Mutability, O: BitType, T: BitType + DynAccess> ChildAccessDyn
-    for AccessDyn<'a, M, O, T>
+impl<'a, M: Mutability, BC: BitContainer, T: BitType + DynAccess> ChildAccessDyn
+    for AccessDyn<'a, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     T::Element: BitType,
 {
-    type Child = AccessDyn<'a, M, O, T::Element>;
+    type Child = AccessDyn<'a, M, BC, T::Element>;
     fn get_child_dyn(self, index: usize) -> Self::Child {
         if index >= T::MAX {
             panic!("index out of bounds");
@@ -40,10 +45,9 @@ where
     }
 }
 
-impl<'a, M: Mutability, O: BitType, T: BitType + MaybeAccess<I>, const I: usize> ChildAccessMaybe<I>
-    for AccessDyn<'a, M, O, T>
+impl<'a, M: Mutability, BC: BitContainer, T: BitType + MaybeAccess<I>, const I: usize>
+    ChildAccessMaybe<I> for AccessDyn<'a, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     <T as MaybeAccess<I>>::Element: BitType,
     BitCheckDyn<{ <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>:
         BitPredicate,
@@ -52,7 +56,7 @@ where
         'a,
         BitCheckDyn<{ <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>,
         M,
-        O,
+        BC,
         <T as MaybeAccess<I>>::Element,
     >;
     fn get_child_maybe(self) -> Self::Child {
@@ -60,22 +64,20 @@ where
     }
 }
 
-impl<'a, M: Mutability, O: BitType, T: TupleAccess<I> + BitType, const I: usize> ChildAccess<I>
-    for AccessDyn<'a, M, O, T>
+impl<'a, M: Mutability, BC: BitContainer, T: TupleAccess<I> + BitType, const I: usize>
+    ChildAccess<I> for AccessDyn<'a, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     <T as TupleAccess<I>>::Element: BitType,
 {
-    type Child = AccessDyn<'a, M, O, <T as TupleAccess<I>>::Element>;
+    type Child = AccessDyn<'a, M, BC, <T as TupleAccess<I>>::Element>;
 
     fn get_child(self) -> Self::Child {
         Self::Child::new(self.bits, self.offset + <T as TupleAccess<I>>::BIT_OFFSET)
     }
 }
 
-impl<'a, M: Mutability, T: BitType, O: BitType> Accessor<O, T, M> for AccessDyn<'a, M, O, T>
+impl<'a, M: Mutability, T: BitType, BC: BitContainer> Accessor<BC, T, M> for AccessDyn<'a, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     [u8; bits_to_bytes(T::BITS)]: Sized,
     [u8; mem::size_of::<T>()]: Sized,
 {
@@ -85,7 +87,7 @@ where
 
     fn extract(&self) -> Self::Extracted {
         T::to_aligned(
-            &unsafe { &*self.bits.to_const() }.mem[get_byte_range(self.offset, T::BITS)],
+            unsafe { &*self.bits.to_const() }.get_range(get_byte_range(self.offset, T::BITS)),
             self.offset % 8,
         )
     }
@@ -96,8 +98,8 @@ where
     {
         T::from_aligned(
             &aligned,
-            &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
-                [get_byte_range(self.offset, T::BITS)],
+            unsafe { &mut *self.bits.assert_mut().to_mut() }
+                .get_range_mut(get_byte_range(self.offset, T::BITS)),
             self.offset % 8,
         )
     }
@@ -109,7 +111,7 @@ where
         self.insert(f(self.extract()))
     }
 
-    type CastAccess<U: BitType, C: Mutability> = AccessDyn<'a, C, O, U>;
+    type CastAccess<U: BitType, C: Mutability> = AccessDyn<'a, C, BC, U>;
 
     fn access(self) -> Self::CastAccess<T, Const> {
         Self::CastAccess::<T, Const>::new(self.bits.immut(), self.offset)

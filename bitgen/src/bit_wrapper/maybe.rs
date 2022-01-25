@@ -1,24 +1,45 @@
+use crate::BitContainer;
+
 use super::*;
 pub struct AccessMaybe<
     'a,
     P: BitPredicate + Default,
     M: Mutability,
-    O: BitType,
+    BC: BitContainer,
     T: BitType,
     const OFFSET: usize,
-> where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    bits: Address<M, Bit<O>>,
+> {
+    bits: Address<M, BC>,
     _marker: PhantomData<&'a (P, T)>,
 }
 
-impl<'a, P: BitPredicate + Default, M: Mutability, O: BitType, T: BitType, const OFFSET: usize>
-    AccessMaybe<'a, P, M, O, T, OFFSET>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
+impl<
+        'a,
+        P: BitPredicate + Default,
+        M: Mutability,
+        BC: BitContainer,
+        T: BitType,
+        const OFFSET: usize,
+    > Clone for AccessMaybe<'a, P, M, BC, T, OFFSET>
 {
-    pub(crate) fn new(bits: Address<M, Bit<O>>) -> Self {
+    fn clone(&self) -> Self {
+        Self {
+            bits: self.bits.clone(),
+            _marker: self._marker.clone(),
+        }
+    }
+}
+
+impl<
+        'a,
+        P: BitPredicate + Default,
+        M: Mutability,
+        BC: BitContainer,
+        T: BitType,
+        const OFFSET: usize,
+    > AccessMaybe<'a, P, M, BC, T, OFFSET>
+{
+    pub(crate) fn new(bits: Address<M, BC>) -> Self {
         Self {
             bits,
             _marker: PhantomData,
@@ -30,13 +51,12 @@ impl<
         'a,
         P: BitPredicate + Default,
         M: Mutability,
-        O: BitType,
+        BC: 'a + BitContainer,
         T: MaybeAccess<I> + BitType,
         const OFFSET: usize,
         const I: usize,
-    > ChildAccessMaybe<I> for AccessMaybe<'a, P, M, O, T, OFFSET>
+    > ChildAccessMaybe<I> for AccessMaybe<'a, P, M, BC, T, OFFSET>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     [u8; OFFSET + <T as MaybeAccess<I>>::BIT_OFFSET]: Sized,
     <T as MaybeAccess<I>>::Element: BitType,
     BitCheck<OFFSET, { <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>:
@@ -53,7 +73,7 @@ where
             P,
         >,
         M,
-        O,
+        BC,
         <T as MaybeAccess<I>>::Element,
         { OFFSET + <T as MaybeAccess<I>>::BIT_OFFSET },
     >;
@@ -67,15 +87,14 @@ impl<
         'a,
         P: BitPredicate + Default,
         M: Mutability,
-        O: BitType,
+        BC: BitContainer,
         T: BitType + DynAccess,
         const OFFSET: usize,
-    > ChildAccessDyn for AccessMaybe<'a, P, M, O, T, OFFSET>
+    > ChildAccessDyn for AccessMaybe<'a, P, M, BC, T, OFFSET>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     T::Element: BitType,
 {
-    type Child = AccessMaybeDyn<'a, P, M, O, T::Element>;
+    type Child = AccessMaybeDyn<'a, P, M, BC, T::Element>;
     fn get_child_dyn(self, index: usize) -> Self::Child {
         if index >= T::MAX {
             panic!("index out of bounds");
@@ -91,13 +110,12 @@ impl<
         'a,
         P: BitPredicate + Default,
         M: Mutability,
-        O: BitType,
+        BC: BitContainer,
         T: TupleAccess<I> + BitType,
         const OFFSET: usize,
         const I: usize,
-    > ChildAccess<I> for AccessMaybe<'a, P, M, O, T, OFFSET>
+    > ChildAccess<I> for AccessMaybe<'a, P, M, BC, T, OFFSET>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     <T as TupleAccess<I>>::Element: BitType,
     [u8; OFFSET + <T as TupleAccess<I>>::BIT_OFFSET]: Sized,
 {
@@ -105,7 +123,7 @@ where
         'a,
         P,
         M,
-        O,
+        BC,
         <T as TupleAccess<I>>::Element,
         { OFFSET + <T as TupleAccess<I>>::BIT_OFFSET },
     >;
@@ -115,10 +133,15 @@ where
     }
 }
 
-impl<'a, P: BitPredicate + Default, M: Mutability, O: BitType, T: BitType, const OFFSET: usize>
-    Accessor<O, T, M> for AccessMaybe<'a, P, M, O, T, OFFSET>
+impl<
+        'a,
+        P: BitPredicate + Default,
+        M: Mutability,
+        BC: BitContainer,
+        T: BitType,
+        const OFFSET: usize,
+    > Accessor<BC, T, M> for AccessMaybe<'a, P, M, BC, T, OFFSET>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     [u8; bits_to_bytes(T::BITS)]: Sized,
     [u8; mem::size_of::<T>()]: Sized,
 {
@@ -127,9 +150,9 @@ where
     type InsertResult = Result<(), ()>;
 
     fn extract(&self) -> Self::Extracted {
-        if P::default().is_true(&unsafe { &*self.bits.to_const() }.mem) {
+        if P::default().is_true(unsafe { &*self.bits.to_const() }.get_full()) {
             Some(T::to_aligned(
-                &unsafe { &*self.bits.to_const() }.mem[get_byte_range(OFFSET, T::BITS)],
+                unsafe { &*self.bits.to_const() }.get_range(get_byte_range(OFFSET, T::BITS)),
                 OFFSET % 8,
             ))
         } else {
@@ -141,11 +164,11 @@ where
     where
         (M, Mut): InferEq,
     {
-        if P::default().is_true(&unsafe { &*self.bits.to_const() }.mem) {
+        if P::default().is_true(unsafe { &*self.bits.to_const() }.get_full()) {
             T::from_aligned(
                 &aligned,
-                &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
-                    [get_byte_range(OFFSET, T::BITS)],
+                unsafe { &mut *self.bits.assert_mut().to_mut() }
+                    .get_range_mut(get_byte_range(OFFSET, T::BITS)),
                 OFFSET % 8,
             );
             Ok(())
@@ -158,16 +181,16 @@ where
     where
         (M, Mut): InferEq,
     {
-        if P::default().is_true(&unsafe { &*self.bits.to_const() }.mem) {
+        if P::default().is_true(unsafe { &*self.bits.to_const() }.get_full()) {
             let extracted = T::to_aligned(
-                &unsafe { &*self.bits.to_const() }.mem[get_byte_range(OFFSET, T::BITS)],
+                unsafe { &*self.bits.to_const() }.get_range(get_byte_range(OFFSET, T::BITS)),
                 OFFSET % 8,
             );
             let mapped = f(extracted);
             T::from_aligned(
                 &mapped,
-                &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
-                    [get_byte_range(OFFSET, T::BITS)],
+                unsafe { &mut *self.bits.assert_mut().to_mut() }
+                    .get_range_mut(get_byte_range(OFFSET, T::BITS)),
                 OFFSET % 8,
             );
             Ok(())
@@ -176,7 +199,7 @@ where
         }
     }
 
-    type CastAccess<U: BitType, C: Mutability> = AccessMaybe<'a, P, C, O, U, OFFSET>;
+    type CastAccess<U: BitType, C: Mutability> = AccessMaybe<'a, P, C, BC, U, OFFSET>;
 
     fn access(self) -> Self::CastAccess<T, Const> {
         Self::CastAccess::<T, Const>::new(self.bits.immut())

@@ -1,8 +1,9 @@
 use super::*;
-pub trait BitPredicate {
+
+pub trait BitPredicate: Clone {
     fn is_true(&self, slice: &[u8]) -> bool;
 }
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PredicateAnd<A: BitPredicate, B: BitPredicate>(pub A, pub B);
 
 impl<A: BitPredicate, B: BitPredicate> BitPredicate for PredicateAnd<A, B> {
@@ -11,9 +12,10 @@ impl<A: BitPredicate, B: BitPredicate> BitPredicate for PredicateAnd<A, B> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct BitCheck<const OFFSET: usize, const NUM_BITS: usize, const BITS: u32>;
 
+#[derive(Clone)]
 pub struct BitCheckDyn<const NUM_BITS: usize, const BITS: u32>(pub usize);
 
 impl<const OFFSET: usize, const NUM_BITS: usize, const BITS: u32> BitPredicate

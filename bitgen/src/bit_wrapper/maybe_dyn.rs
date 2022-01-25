@@ -1,20 +1,31 @@
+use crate::BitContainer;
+
 use super::*;
-#[derive(Clone)]
-pub struct AccessMaybeDyn<'a, P: BitPredicate, M: Mutability, O: BitType, T: BitType>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
-{
-    bits: Address<M, Bit<O>>,
+
+pub struct AccessMaybeDyn<'a, P: BitPredicate, M: Mutability, BC: BitContainer, T: BitType> {
+    bits: Address<M, BC>,
     offset: usize,
     predicate: P,
     _marker: PhantomData<&'a T>,
 }
 
-impl<'a, P: BitPredicate, M: Mutability, O: BitType, T: BitType> AccessMaybeDyn<'a, P, M, O, T>
-where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
+impl<'a, P: BitPredicate, M: Mutability, BC: BitContainer, T: BitType> Clone
+    for AccessMaybeDyn<'a, P, M, BC, T>
 {
-    pub(crate) fn new(bits: Address<M, Bit<O>>, offset: usize, predicate: P) -> Self {
+    fn clone(&self) -> Self {
+        Self {
+            bits: self.bits.clone(),
+            offset: self.offset.clone(),
+            predicate: self.predicate.clone(),
+            _marker: self._marker.clone(),
+        }
+    }
+}
+
+impl<'a, P: BitPredicate, M: Mutability, BC: BitContainer, T: BitType>
+    AccessMaybeDyn<'a, P, M, BC, T>
+{
+    pub(crate) fn new(bits: Address<M, BC>, offset: usize, predicate: P) -> Self {
         Self {
             bits,
             offset,
@@ -28,12 +39,11 @@ impl<
         'a,
         P: BitPredicate,
         M: Mutability,
-        O: BitType,
+        BC: BitContainer,
         T: MaybeAccess<I> + BitType,
         const I: usize,
-    > ChildAccessMaybe<I> for AccessMaybeDyn<'a, P, M, O, T>
+    > ChildAccessMaybe<I> for AccessMaybeDyn<'a, P, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     <T as MaybeAccess<I>>::Element: BitType,
     BitCheckDyn<{ <T as MaybeAccess<I>>::BIT_OFFSET }, { <T as MaybeAccess<I>>::EXPECTED }>:
         BitPredicate,
@@ -45,7 +55,7 @@ where
             P,
         >,
         M,
-        O,
+        BC,
         <T as MaybeAccess<I>>::Element,
     >;
 
@@ -58,13 +68,12 @@ where
     }
 }
 
-impl<'a, P: BitPredicate, M: Mutability, O: BitType, T: BitType + DynAccess> ChildAccessDyn
-    for AccessMaybeDyn<'a, P, M, O, T>
+impl<'a, P: BitPredicate, M: Mutability, BC: BitContainer, T: BitType + DynAccess> ChildAccessDyn
+    for AccessMaybeDyn<'a, P, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     T::Element: BitType,
 {
-    type Child = AccessMaybeDyn<'a, P, M, O, T::Element>;
+    type Child = AccessMaybeDyn<'a, P, M, BC, T::Element>;
     fn get_child_dyn(self, index: usize) -> Self::Child {
         if index >= T::MAX {
             panic!("index out of bounds");
@@ -80,15 +89,14 @@ impl<
         'a,
         P: BitPredicate,
         M: Mutability,
-        O: BitType,
+        BC: BitContainer,
         T: BitType + TupleAccess<I>,
         const I: usize,
-    > ChildAccess<I> for AccessMaybeDyn<'a, P, M, O, T>
+    > ChildAccess<I> for AccessMaybeDyn<'a, P, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     T::Element: BitType,
 {
-    type Child = AccessMaybeDyn<'a, P, M, O, <T as TupleAccess<I>>::Element>;
+    type Child = AccessMaybeDyn<'a, P, M, BC, <T as TupleAccess<I>>::Element>;
     fn get_child(self) -> Self::Child {
         Self::Child::new(
             self.bits,
@@ -98,10 +106,9 @@ where
     }
 }
 
-impl<'a, P: BitPredicate, M: Mutability, O: BitType, T: BitType> Accessor<O, T, M>
-    for AccessMaybeDyn<'a, P, M, O, T>
+impl<'a, P: BitPredicate, M: Mutability, BC: BitContainer, T: BitType> Accessor<BC, T, M>
+    for AccessMaybeDyn<'a, P, M, BC, T>
 where
-    [u8; bits_to_bytes(O::BITS)]: Sized,
     [u8; bits_to_bytes(T::BITS)]: Sized,
     [u8; mem::size_of::<T>()]: Sized,
 {
@@ -112,10 +119,10 @@ where
     fn extract(&self) -> Self::Extracted {
         if self
             .predicate
-            .is_true(&unsafe { &*self.bits.to_const() }.mem)
+            .is_true(unsafe { &*self.bits.to_const() }.get_full())
         {
             Some(T::to_aligned(
-                &unsafe { &*self.bits.to_const() }.mem[get_byte_range(self.offset, T::BITS)],
+                unsafe { &*self.bits.to_const() }.get_range(get_byte_range(self.offset, T::BITS)),
                 self.offset % 8,
             ))
         } else {
@@ -129,12 +136,12 @@ where
     {
         if self
             .predicate
-            .is_true(&unsafe { &*self.bits.to_const() }.mem)
+            .is_true(unsafe { &*self.bits.to_const() }.get_full())
         {
             T::from_aligned(
                 &aligned,
-                &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
-                    [get_byte_range(self.offset, T::BITS)],
+                unsafe { &mut *self.bits.assert_mut().to_mut() }
+                    .get_range_mut(get_byte_range(self.offset, T::BITS)),
                 self.offset % 8,
             );
             Ok(())
@@ -149,17 +156,17 @@ where
     {
         if self
             .predicate
-            .is_true(&unsafe { &*self.bits.to_const() }.mem)
+            .is_true(unsafe { &*self.bits.to_const() }.get_full())
         {
             let extracted = T::to_aligned(
-                &unsafe { &*self.bits.to_const() }.mem[get_byte_range(self.offset, T::BITS)],
+                unsafe { &*self.bits.to_const() }.get_range(get_byte_range(self.offset, T::BITS)),
                 self.offset % 8,
             );
             let mapped = f(extracted);
             T::from_aligned(
                 &mapped,
-                &mut unsafe { &mut *self.bits.assert_mut().to_mut() }.mem
-                    [get_byte_range(self.offset, T::BITS)],
+                unsafe { &mut *self.bits.assert_mut().to_mut() }
+                    .get_range_mut(get_byte_range(self.offset, T::BITS)),
                 self.offset % 8,
             );
             Ok(())
@@ -168,7 +175,7 @@ where
         }
     }
 
-    type CastAccess<U: BitType, C: Mutability> = AccessMaybeDyn<'a, P, C, O, U>;
+    type CastAccess<U: BitType, C: Mutability> = AccessMaybeDyn<'a, P, C, BC, U>;
 
     fn access(self) -> Self::CastAccess<T, Const> {
         Self::CastAccess::<T, Const>::new(self.bits.immut(), self.offset, self.predicate)
