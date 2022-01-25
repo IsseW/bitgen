@@ -11,9 +11,9 @@ pub struct AccessDyn<'a, M: Mutability, BC: BitContainer, T: BitType> {
 impl<'a, M: Mutability, BC: BitContainer, T: BitType> Clone for AccessDyn<'a, M, BC, T> {
     fn clone(&self) -> Self {
         Self {
-            bits: self.bits.clone(),
+            bits: self.bits,
             offset: self.offset,
-            _marker: self._marker.clone(),
+            _marker: self._marker,
         }
     }
 }

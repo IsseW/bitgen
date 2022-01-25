@@ -12,8 +12,8 @@ impl<'a, M: Mutability, BC: BitContainer, T: BitType, const OFFSET: usize> Clone
 {
     fn clone(&self) -> Self {
         Self {
-            bits: self.bits.clone(),
-            _marker: self._marker.clone(),
+            bits: self.bits,
+            _marker: self._marker,
         }
     }
 }

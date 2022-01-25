@@ -24,8 +24,8 @@ impl<
 {
     fn clone(&self) -> Self {
         Self {
-            bits: self.bits.clone(),
-            _marker: self._marker.clone(),
+            bits: self.bits,
+            _marker: self._marker,
         }
     }
 }

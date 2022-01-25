@@ -92,6 +92,15 @@ where
     }
 }
 
+impl<T: BitType> Default for BitVec<T>
+where
+    [u8; bits_to_bytes(T::BITS)]: Sized,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: BitType> BitContainer for BitVec<T>
 where
     [u8; bits_to_bytes(T::BITS)]: Sized,

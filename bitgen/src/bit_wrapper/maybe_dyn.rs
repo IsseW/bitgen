@@ -14,10 +14,10 @@ impl<'a, P: BitPredicate, M: Mutability, BC: BitContainer, T: BitType> Clone
 {
     fn clone(&self) -> Self {
         Self {
-            bits: self.bits.clone(),
-            offset: self.offset.clone(),
+            bits: self.bits,
+            offset: self.offset,
             predicate: self.predicate.clone(),
-            _marker: self._marker.clone(),
+            _marker: self._marker,
         }
     }
 }
