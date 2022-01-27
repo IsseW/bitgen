@@ -47,11 +47,7 @@ where
     }
 
     pub fn extract_underlying(self) -> <Underlying<N> as Type>::I {
-        if self.is_negative() {
-            self.0 & max_with_bits(N)
-        } else {
-            self.0 & max_with_bits(<Underlying<N> as Type>::BITS)
-        }
+        (self.0 << (<Underlying<N> as Type>::BITS - N)) >> (<Underlying<N> as Type>::BITS - N)
     }
 }
 

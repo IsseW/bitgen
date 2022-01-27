@@ -32,9 +32,10 @@ mod tests {
         let mut b: I<4> = ibits(5);
         b += ibits(2);
         assert_eq!(b, ibits(7));
-        assert_eq!(<bitgen::I<4> as AsPrimitive<i8>>::as_(b), 7i8);
+        assert_eq!(b.extract_underlying(), 7);
         b /= ibits(4);
         assert_eq!(b, ibits(1));
+        assert_eq!(b.extract_underlying(), 1);
 
         assert!(b < ibits(2));
         assert!(b <= ibits(1));
@@ -45,6 +46,8 @@ mod tests {
 
         b -= ibits(1);
         assert_eq!(b, ibits(-1));
+
+        assert_eq!(b.extract_underlying(), -1);
     }
 
     #[test]
